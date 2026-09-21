@@ -88,10 +88,10 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   <!-- NEW MATCH -->
   <section class="view" id="v-match">
     <div class="card">
-      <label>📷 Scoreboard pic (optional)</label>
+      <label>📷 Scoreboard pic (required)</label>
       <input type="file" id="mPic" accept="image/*" multiple style="display:none" onchange="picChosen(this)">
       <button class="btn ghost" onclick="document.getElementById('mPic').click()" style="margin-top:0">📷 Snap / upload end-game pic</button>
-      <div class="mini" id="picStatus" style="margin-top:8px">Skip typing — Jarvis reads the stats from the pic 🤖</div>
+      <div class="mini" id="picStatus" style="margin-top:8px">Required — Jarvis reads the stats from the pic 🤖</div>
       <div id="picThumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
       <div id="picUnmatched"></div>
     </div>
@@ -107,8 +107,6 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <div class="empty" id="mNoPlayers" style="display:none">Add players in the 👥 tab first</div>
       <label>Team round reached</label>
       <input type="number" id="mRound" min="1" placeholder="e.g. 27">
-      <label>Last survivor 🏆</label>
-      <select id="mSurvivor"><option value="">— nobody —</option></select>
     </div>
     <div class="card">
       <label>End-of-game stats per player</label>
@@ -140,7 +138,7 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <div class="rubricrow"><span>💀 Most kills</span><b>+2</b></div>
       <div class="rubricrow"><span>🎯 Most headshots</span><b>+2</b></div>
       <div class="rubricrow"><span>❤️ Each revive</span><b>+2 each</b></div>
-      <div class="rubricrow"><span>🥇 Last survivor</span><b>+3</b></div>
+      
       <div class="rubricrow"><span>🧟 Round 11–20 (team)</span><b>+2</b></div>
       <div class="rubricrow"><span>🧟 Round 21–30 (team)</span><b>+4</b></div>
       <div class="rubricrow"><span>🧟 Round 31–40 (team)</span><b>+6</b></div>
@@ -171,7 +169,7 @@ function go(tab){
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
   document.querySelectorAll('nav button').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
   if(tab==='board')renderBoard();
-  if(tab==='match'){renderMatchForm();if(!pendingPics.length){document.getElementById('picThumbs').innerHTML='';document.getElementById('picUnmatched').innerHTML='';picStatus('Skip typing — Jarvis reads the stats from the pic 🤖')}}
+  if(tab==='match'){renderMatchForm();if(!pendingPics.length){document.getElementById('picThumbs').innerHTML='';document.getElementById('picUnmatched').innerHTML='';picStatus('Required — Jarvis reads the stats from the pic 🤖')}}
   if(tab==='hist')renderHist();
   if(tab==='players')renderPlayers();
   window.scrollTo(0,0);
@@ -199,7 +197,6 @@ function scoreMatch(m){
   award(maxOf(S,'kills'),'💀 most kills',2);
   award(maxOf(S,'headshots'),'🎯 most headshots',2);
   S.forEach(s=>{const r=+s.revives||0;if(r>0&&bd[s.playerId]){bd[s.playerId].total+=r*2;bd[s.playerId].notes.push(`❤️ ${r} revives +${r*2}`)}});
-  if(m.survivor&&bd[m.survivor]){bd[m.survivor].total+=3;bd[m.survivor].notes.push('🥇 last survivor +3')}
   const rb=roundBonus(+m.round||0);
   if(rb>0){S.forEach(s=>bd[s.playerId]&&(bd[s.playerId].total+=rb,bd[s.playerId].notes.push(`🧟 round ${m.round} +${rb}`)))}
   return bd;
@@ -295,10 +292,6 @@ function applyParse(p){
       '<div class="mini" style="margin-bottom:4px"> unrecognized — tap to add & fill:</div>'+
       unmatched.map((ps,i)=>`<span class="chip" onclick="addFromPic(${JSON.stringify(ps).replace(/"/g,'&quot;')})">➕ ${esc(ps.name)}</span>`).join('');
   }else document.getElementById('picUnmatched').innerHTML='';
-  if(p.survivorHint){
-    const pl=fuzzyFindPlayer(p.survivorHint);
-    if(pl)setTimeout(()=>{const s=document.getElementById('mSurvivor');if(s)s.value=pl.id},100);
-  }
 }
 function addFromPic(ps){
   if(DB.players.some(p=>normName(p.name)===normName(ps.name)))return;
@@ -362,8 +355,6 @@ function renderMatchForm(){
   if(!DB.players.length){pw.innerHTML='';np.style.display='block';return}
   np.style.display='none';
   pw.innerHTML=DB.players.map(p=>`<span class="chip ${picked.has(p.id)?'on':''}" onclick="togglePick('${p.id}')">${picked.has(p.id)?'✔ ':''}${esc(p.name)}</span>`).join('');
-  const sel=document.getElementById('mSurvivor'),cur=sel.value;
-  sel.innerHTML='<option value="">— nobody —</option>'+[...picked].map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('');
   renderStatInputs();
 }
 function togglePick(id){picked.has(id)?picked.delete(id):picked.add(id);renderMatchForm()}
@@ -385,6 +376,7 @@ function renderStatInputs(){
 function saveMatch(){
   const ids=[...picked];
   if(!ids.length)return toast('Pick who played first');
+  if(!pendingPics.length)return toast('📷 End-game scoreboard pic is required');
   const round=+document.getElementById('mRound').value||0;
   const stats=ids.map(id=>({playerId:id,
     score:+document.getElementById('st-score-'+id).value||0,
@@ -394,7 +386,7 @@ function saveMatch(){
   const hasAny=stats.some(s=>s.score||s.kills||s.headshots||s.revives);
   if(!hasAny&&round<1)return toast('Enter some stats or the round');
   const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
-    mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats};
+    mode:document.getElementById('mMode').value,round,stats};
   m.points=scoreMatch(m);
   m.pics=pendingPics.map(p=>p.thumb);
   DB.matches.push(m);save();
@@ -418,7 +410,6 @@ function renderHist(){
         <b>${fmtDate(m.date)} · ${esc(m.mode)}</b>
         <span class="mini">round ${m.round||'—'}</span>
       </div>
-      ${m.survivor?`<div class="mini">🏆 last survivor: ${esc(pname(m.survivor))}</div>`:''}
       ${m.pics&&m.pics.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${m.pics.map((t,i)=>`<img src="${t}" onclick="viewPic(this)" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer">`).join('')}</div>`:''}
       <div style="margin-top:8px">${m.stats.map(s=>{const p=m.points[s.playerId]||{total:0,notes:[]};
         return `<div class="mrow"><span>${esc(pname(s.playerId))}<span class="mini"> · ${s.kills}k ${s.headshots}hs ${s.revives}rev</span></span><b>+${p.total}</b></div>
