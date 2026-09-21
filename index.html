@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Black Ops League — Zombies</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧟</text></svg>">
+<style>
+:root{
+  --bg:#0b0e0c; --panel:#141a15; --panel2:#1a221b; --line:#2a352c;
+  --green:#6bcb26; --green-dim:#3d7522; --orange:#ff8c1a; --red:#e5484d;
+  --text:#e8eee6; --muted:#8b968a; --danger:#ff5c5c;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh;padding-bottom:90px}
+body::before{content:'';position:fixed;inset:0;background:
+  radial-gradient(600px 300px at 80% -10%, rgba(107,203,38,.08), transparent 60%),
+  radial-gradient(500px 260px at 10% 110%, rgba(255,140,26,.06), transparent 60%);pointer-events:none}
+.wrap{max-width:520px;margin:0 auto;padding:16px 14px}
+h1{font-size:1.35rem;letter-spacing:.5px;text-transform:uppercase}
+h1 span{color:var(--green)}
+.sub{color:var(--muted);font-size:.8rem;margin-top:2px}
+.tabs{display:flex;gap:6px;margin:14px 0;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font-weight:600;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--green);border-color:var(--green);color:#0b0e0c}
+.view{display:none}.view.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+label{display:block;font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 5px}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 12px;font-size:.95rem;outline:none}
+input:focus,select:focus{border-color:var(--green-dim)}
+button{font-family:inherit}
+.btn{width:100%;padding:13px;border-radius:10px;border:0;background:var(--green);color:#0b0e0c;font-weight:800;font-size:1rem;cursor:pointer;text-transform:uppercase;letter-spacing:.8px;margin-top:16px}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:600}
+.btn.danger{background:transparent;border:1px solid var(--danger);color:var(--danger);font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:.88rem;margin:4px 4px 0 0;user-select:none}
+.chip.on{border-color:var(--green);background:rgba(107,203,38,.14);color:var(--green);font-weight:700}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center}
+.stat b{display:block;font-size:1.15rem;color:var(--green)}
+.stat span{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.rankrow{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:9px}
+.rank{font-size:1.1rem;font-weight:900;width:30px;text-align:center;color:var(--muted)}
+.rankrow.top .rank{color:var(--orange)}
+.pname{font-weight:700}
+.ptag{color:var(--muted);font-size:.75rem}
+.pts{margin-left:auto;text-align:right}
+.pts b{color:var(--green);font-size:1.05rem}
+.pts span{display:block;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.breakdown{font-size:.78rem;color:var(--muted);line-height:1.7;margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+.breakdown em{color:var(--green);font-style:normal;font-weight:700}
+.mrow{display:flex;justify-content:space-between;font-size:.85rem;padding:6px 0;border-bottom:1px dashed var(--line)}
+.mrow:last-child{border:0}
+.mrow b{color:var(--green)}
+.histcard{position:relative}
+.histcard .del{position:absolute;top:10px;right:12px;color:var(--muted);cursor:pointer;font-size:.8rem;padding:4px 8px;border-radius:8px}
+.histcard .del:hover{color:var(--danger)}
+.empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:.9rem}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel2);border:1px solid var(--green-dim);color:var(--text);padding:11px 18px;border-radius:12px;font-size:.85rem;opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:90%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.playerdel{color:var(--danger);cursor:pointer;font-size:.8rem;margin-left:10px}
+nav{position:fixed;bottom:0;left:0;right:0;background:rgba(11,14,12,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;z-index:10;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--muted);padding:12px 4px 10px;font-size:.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+nav button div{font-size:1.25rem;margin-bottom:2px}
+nav button.on{color:var(--green)}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+.mini{font-size:.72rem;color:var(--muted)}
+.rubricrow{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:.88rem}
+.rubricrow:last-child{border:0}
+.rubricrow b{color:var(--green);white-space:nowrap}
+@media(min-width:521px){.wrap{padding-top:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Black <span>Ops</span> League</h1>
+  <div class="sub">🧟 Zombies league tracker — points per the rubric</div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <!-- LEADERBOARD -->
+  <section class="view" id="v-board"></section>
+
+  <!-- NEW MATCH -->
+  <section class="view" id="v-match">
+    <div class="card">
+      <label>Match date</label>
+      <input type="date" id="mDate">
+      <label>Game mode</label>
+      <select id="mMode">
+        <option>Solo</option><option>2-Player</option><option>3-Player</option><option>4-Player</option>
+      </select>
+      <label>Who played?</label>
+      <div id="mPlayers"></div>
+      <div class="empty" id="mNoPlayers" style="display:none">Add players in the 👥 tab first</div>
+      <label>Team round reached</label>
+      <input type="number" id="mRound" min="1" placeholder="e.g. 27">
+      <label>Last survivor 🏆</label>
+      <select id="mSurvivor"><option value="">— nobody —</option></select>
+    </div>
+    <div class="card">
+      <label>End-of-game stats per player</label>
+      <div id="mStats"></div>
+    </div>
+    <button class="btn" onclick="saveMatch()">💾 Save match + score it</button>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="view" id="v-hist"></section>
+
+  <!-- PLAYERS -->
+  <section class="view" id="v-players">
+    <div class="card">
+      <label>Add player</label>
+      <div class="row">
+        <input id="pName" placeholder="Name (e.g. Link)">
+        <input id="pTag" placeholder="Gamertag (optional)">
+      </div>
+      <button class="btn ghost" onclick="addPlayer()" style="margin-top:10px">+ Add player</button>
+    </div>
+    <div class="card" id="pList"></div>
+  </section>
+
+  <!-- RUBRIC -->
+  <section class="view" id="v-rubric">
+    <div class="card">
+      <div class="rubricrow"><span>🏆 Highest in-game score</span><b>+3</b></div>
+      <div class="rubricrow"><span>💀 Most kills</span><b>+2</b></div>
+      <div class="rubricrow"><span>🎯 Most headshots</span><b>+2</b></div>
+      <div class="rubricrow"><span>❤️ Each revive</span><b>+2 each</b></div>
+      <div class="rubricrow"><span>🥇 Last survivor</span><b>+3</b></div>
+      <div class="rubricrow"><span>🧟 Round 11–20 (team)</span><b>+2</b></div>
+      <div class="rubricrow"><span>🧟 Round 21–30 (team)</span><b>+4</b></div>
+      <div class="rubricrow"><span>🧟 Round 31–40 (team)</span><b>+6</b></div>
+      <div class="rubricrow"><span>🧟 Round 41–50 (team)</span><b>+8</b></div>
+      <div class="rubricrow"><span>🧟 Round 51+ (team)</span><b>+10</b></div>
+      <p class="mini" style="margin-top:12px">Round bonuses stack as the team climbs (round 27 = +2 +4 = +6, everyone in the match). "Most" categories: tied leaders all get the points. Team round bonus applies to every player in the match.</p>
+    </div>
+  </section>
+</div>
+
+<nav id="nav"></nav>
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY='bol_data';
+let DB=load();
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{players:[],matches:[]}}catch(e){return{players:[],matches:[]}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(DB))}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
+function uid(){return Math.random().toString(36).slice(2,10)}
+function fmtDate(iso){if(!iso)return'';const d=new Date(iso+'T12:00:00');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+
+const TABS=[['board','🏆','Leaderboard'],['match','➕','New match'],['hist','📜','History'],['players','👥','Players'],['rubric','📖','Rubric']];
+function go(tab){
+  TABS.forEach(([id])=>{const v=document.getElementById('v-'+id);if(v)v.classList.toggle('on',id===tab)});
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
+  document.querySelectorAll('nav button').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
+  if(tab==='board')renderBoard();
+  if(tab==='match')renderMatchForm();
+  if(tab==='hist')renderHist();
+  if(tab==='players')renderPlayers();
+  window.scrollTo(0,0);
+}
+function buildNav(){
+  document.getElementById('tabs').innerHTML=TABS.map(([id,icon,label])=>`<button class="tab" onclick="go('${id}')">${icon} ${label}</button>`).join('');
+  document.getElementById('nav').innerHTML=TABS.map(([id,icon,label])=>`<button onclick="go('${id}')"><div>${icon}</div>${label}</button>`).join('');
+}
+
+/* ---------- scoring per rubric ---------- */
+function roundBonus(round){
+  // cumulative bands: 11-20 +2, 21-30 +4, 31-40 +6, 41-50 +8, 51+ +10
+  const bands=[[51,10],[41,8],[31,6],[21,4],[11,2]];
+  let pts=0;
+  for(const[start,val]of bands){if(round>=start)pts+=val;}
+  return pts;
+}
+function maxOf(rows,key){if(!rows.length)return[];const m=Math.max(...rows.map(r=>+r[key]||0));if(m<=0)return[];return rows.filter(r=>+r[key]===m).map(r=>r.playerId)}
+function scoreMatch(m){
+  // m = {round, survivor, stats:[{playerId,score,kills,headshots,revives}]}
+  const S=m.stats,bd={};
+  S.forEach(s=>bd[s.playerId]={total:0,notes:[]});
+  const award=(ids,label,pts)=>{ids.forEach(id=>{if(bd[id]){bd[id].total+=pts;bd[id].notes.push(`${label} +${pts}`)}})};
+  award(maxOf(S,'score'),'🏆 top score',3);
+  award(maxOf(S,'kills'),'💀 most kills',2);
+  award(maxOf(S,'headshots'),'🎯 most headshots',2);
+  S.forEach(s=>{const r=+s.revives||0;if(r>0&&bd[s.playerId]){bd[s.playerId].total+=r*2;bd[s.playerId].notes.push(`❤️ ${r} revives +${r*2}`)}});
+  if(m.survivor&&bd[m.survivor]){bd[m.survivor].total+=3;bd[m.survivor].notes.push('🥇 last survivor +3')}
+  const rb=roundBonus(+m.round||0);
+  if(rb>0){S.forEach(s=>bd[s.playerId]&&(bd[s.playerId].total+=rb,bd[s.playerId].notes.push(`🧟 round ${m.round} +${rb}`)))}
+  return bd;
+}
+
+/* ---------- players ---------- */
+function addPlayer(){
+  const n=document.getElementById('pName').value.trim(),t=document.getElementById('pTag').value.trim();
+  if(!n)return toast('Enter a name');
+  if(DB.players.some(p=>p.name.toLowerCase()===n.toLowerCase()))return toast('Player already exists');
+  DB.players.push({id:uid(),name:n,tag:t,created:new Date().toISOString()});
+  save();document.getElementById('pName').value='';document.getElementById('pTag').value='';
+  renderPlayers();toast('👤 '+n+' added');
+}
+function delPlayer(id){
+  const p=DB.players.find(x=>x.id===id);
+  if(!confirm('Delete '+p.name+'? Their match history stays but loses the name.'))return;
+  DB.players=DB.players.filter(x=>x.id!==id);save();renderPlayers();
+}
+function pname(id){const p=DB.players.find(x=>x.id===id);return p?p.name:'(deleted player)'}
+function ptag(id){const p=DB.players.find(x=>x.id===id);return p&&p.tag?p.tag:''}
+function renderPlayers(){
+  const el=document.getElementById('pList');
+  if(!DB.players.length){el.innerHTML='<div class="empty">No players yet — add the squad ☝️</div>';return}
+  el.innerHTML=DB.players.map(p=>`<div class="mrow"><span>👤 <b style="color:var(--text)">${esc(p.name)}</b>${p.tag?' <span class="mini">@'+esc(p.tag)+'</span>':''}<a class="playerdel" onclick="delPlayer('${p.id}')">remove</a></span><span>${playerTotals(p.id).pts} pts</span></div>`).join('');
+}
+
+/* ---------- leaderboard ---------- */
+function playerTotals(pid){
+  let pts=0,kills=0,heads=0,revives=0,matches=0,rounds=0;
+  DB.matches.forEach(m=>{
+    const s=m.stats.find(x=>x.playerId===pid);if(!s)return;
+    matches++;pts+=m.points[s.playerId]?m.points[s.playerId].total:0;
+    kills+=+s.kills||0;heads+=+s.headshots||0;revives+=+s.revives||0;rounds+=+m.round||0;
+  });
+  return{pts,kills,heads,revives,matches,avgRound:matches?Math.round(rounds/matches):0};
+}
+function renderBoard(){
+  const el=document.getElementById('v-board');
+  if(!DB.players.length||!DB.matches.length){
+    el.innerHTML=`<div class="card"><div class="empty">${!DB.players.length?'No players yet — add the squad in 👥 Players':'No matches logged yet — drop your first one in ➕ New match'}</div></div>`;return;
+  }
+  const rows=DB.players.map(p=>({p,...playerTotals(p.id)})).sort((a,b)=>b.pts-a.pts||b.kills-a.kills);
+  el.innerHTML=rows.map((r,i)=>`
+    <div class="rankrow ${i===0?'top':''}">
+      <div class="rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+      <div><div class="pname">${esc(r.p.name)}${r.p.tag?' <span class="ptag">@'+esc(r.p.tag)+'</span>':''}</div>
+        <div class="mini">${r.matches} match${r.matches!==1?'es':''} · ${r.kills} kills · ${r.revives} revives · avg round ${r.avgRound}</div></div>
+      <div class="pts"><b>${r.pts}</b><span>points</span></div>
+    </div>`).join('');
+}
+
+/* ---------- new match ---------- */
+let picked=new Set();
+function renderMatchForm(){
+  document.getElementById('mDate').value=document.getElementById('mDate').value||new Date().toISOString().slice(0,10);
+  const pw=document.getElementById('mPlayers'),np=document.getElementById('mNoPlayers');
+  if(!DB.players.length){pw.innerHTML='';np.style.display='block';return}
+  np.style.display='none';
+  pw.innerHTML=DB.players.map(p=>`<span class="chip ${picked.has(p.id)?'on':''}" onclick="togglePick('${p.id}')">${picked.has(p.id)?'✔ ':''}${esc(p.name)}</span>`).join('');
+  const sel=document.getElementById('mSurvivor'),cur=sel.value;
+  sel.innerHTML='<option value="">— nobody —</option>'+[...picked].map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('');
+  renderStatInputs();
+}
+function togglePick(id){picked.has(id)?picked.delete(id):picked.add(id);renderMatchForm()}
+function renderStatInputs(){
+  const el=document.getElementById('mStats');
+  const ids=[...picked];
+  if(!ids.length){el.innerHTML='<div class="empty">Pick who played ☝️</div>';return}
+  el.innerHTML=ids.map(id=>`
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-weight:700;margin-bottom:8px">👤 ${esc(pname(id))}${ptag(id)?' <span class="ptag">@'+esc(ptag(id))+'</span>':''}</div>
+      <div class="grid3">
+        <div><label style="margin-top:0">Score</label><input type="number" min="0" id="st-score-${id}"></div>
+        <div><label style="margin-top:0">Kills</label><input type="number" min="0" id="st-kills-${id}"></div>
+        <div><label style="margin-top:0">Headshots</label><input type="number" min="0" id="st-heads-${id}"></div>
+      </div>
+      <label>Revives ❤️</label><input type="number" min="0" id="st-rev-${id}">
+    </div>`).join('');
+}
+function saveMatch(){
+  const ids=[...picked];
+  if(!ids.length)return toast('Pick who played first');
+  const round=+document.getElementById('mRound').value||0;
+  const stats=ids.map(id=>({playerId:id,
+    score:+document.getElementById('st-score-'+id).value||0,
+    kills:+document.getElementById('st-kills-'+id).value||0,
+    headshots:+document.getElementById('st-heads-'+id).value||0,
+    revives:+document.getElementById('st-rev-'+id).value||0}));
+  const hasAny=stats.some(s=>s.score||s.kills||s.headshots||s.revives);
+  if(!hasAny&&round<1)return toast('Enter some stats or the round');
+  const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
+    mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats};
+  m.points=scoreMatch(m);
+  DB.matches.push(m);save();
+  picked.clear();
+  document.getElementById('mRound').value='';
+  renderMatchForm();
+  const tot=Object.values(m.points).reduce((a,b)=>a+b.total,0);
+  toast('✅ Match logged — '+tot+' league points awarded');
+  go('hist');
+}
+
+/* ---------- history ---------- */
+function renderHist(){
+  const el=document.getElementById('v-hist');
+  if(!DB.matches.length){el.innerHTML='<div class="card"><div class="empty">No matches yet 🧟</div></div>';return}
+  el.innerHTML=[...DB.matches].reverse().map(m=>{
+    const tot=Object.values(m.points).reduce((a,b)=>a+b.total,0);
+    return `<div class="card histcard">
+      <span class="del" onclick="delMatch('${m.id}')">🗑</span>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <b>${fmtDate(m.date)} · ${esc(m.mode)}</b>
+        <span class="mini">round ${m.round||'—'}</span>
+      </div>
+      ${m.survivor?`<div class="mini">🏆 last survivor: ${esc(pname(m.survivor))}</div>`:''}
+      <div style="margin-top:8px">${m.stats.map(s=>{const p=m.points[s.playerId]||{total:0,notes:[]};
+        return `<div class="mrow"><span>${esc(pname(s.playerId))}<span class="mini"> · ${s.kills}k ${s.headshots}hs ${s.revives}rev</span></span><b>+${p.total}</b></div>
+        <div class="breakdown">${p.notes.map(n=>`<em>${n.split('+')[0].trim()}</em> +${n.split('+')[1]||''}`).join(' · ')}</div>`}).join('')}
+      </div>
+      <div class="mrow" style="margin-top:8px;font-weight:800"><span>MATCH TOTAL</span><b style="color:var(--orange)">+${tot}</b></div>
+    </div>`;
+  }).join('');
+}
+function delMatch(id){
+  if(!confirm('Delete this match? Leaderboard will update.'))return;
+  DB.matches=DB.matches.filter(m=>m.id!==id);save();renderHist();toast('Match deleted');
+}
+
+buildNav();
+go('board');
+</script>
+</body>
+</html>
