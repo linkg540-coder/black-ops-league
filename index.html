@@ -248,9 +248,19 @@ function renderThumbs(){
 async function uploadPic(pic,dataUrl){
   picStatus('📤 Uploading…');
   try{
-    const r=await fetch(FN_BASE+'/bolUploadPic',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl,deviceId:DEV_ID})});
+    const b64=dataUrl.split(',')[1]||'';
+    if(b64.length>3_600_000)throw new Error('pic too big');
+    const r=await fetch(FN_BASE+'/bolUploadStart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:DEV_ID})});
     const j=await r.json();if(!j.ok)throw new Error(j.error||'upload failed');
-    pic.parseId=j.id;picStatus('🤖 Jarvis is reading the scoreboard…');
+    pic.parseId=j.id;
+    const CH=9000,n=Math.ceil(b64.length/CH);
+    for(let i=0;i<n;i++){
+      const cr=await fetch(FN_BASE+'/bolUploadChunk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pic.parseId,seq:i,part:b64.slice(i*CH,(i+1)*CH)})});
+      const cj=await cr.json();if(!cj.ok)throw new Error(cj.error||'chunk failed');
+    }
+    const fr=await fetch(FN_BASE+'/bolUploadFinish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pic.parseId})});
+    const fj=await fr.json();if(!fj.ok)throw new Error(fj.error||'finish failed');
+    picStatus('🤖 Jarvis is reading the scoreboard…');
     for(let i=0;i<45;i++){
       await new Promise(r=>setTimeout(r,4000));
       let s;try{s=await(await fetch(FN_BASE+'/bolParseStatus?id='+pic.parseId)).json()}catch(e){continue}
