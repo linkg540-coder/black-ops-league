@@ -88,6 +88,14 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   <!-- NEW MATCH -->
   <section class="view" id="v-match">
     <div class="card">
+      <label>📷 Scoreboard pic (optional)</label>
+      <input type="file" id="mPic" accept="image/*" multiple style="display:none" onchange="picChosen(this)">
+      <button class="btn ghost" onclick="document.getElementById('mPic').click()" style="margin-top:0">📷 Snap / upload end-game pic</button>
+      <div class="mini" id="picStatus" style="margin-top:8px">Skip typing — Jarvis reads the stats from the pic 🤖</div>
+      <div id="picThumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+      <div id="picUnmatched"></div>
+    </div>
+    <div class="card">
       <label>Match date</label>
       <input type="date" id="mDate">
       <label>Game mode</label>
@@ -143,6 +151,7 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   </section>
 </div>
 
+<div id="picOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;display:none;align-items:center;justify-content:center;padding:16px" onclick="this.style.display='none'"><img id="picOverlayImg" style="max-width:100%;max-height:100%;border-radius:10px"></div>
 <nav id="nav"></nav>
 <div class="toast" id="toast"></div>
 
@@ -162,7 +171,7 @@ function go(tab){
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
   document.querySelectorAll('nav button').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
   if(tab==='board')renderBoard();
-  if(tab==='match')renderMatchForm();
+  if(tab==='match'){renderMatchForm();if(!pendingPics.length){document.getElementById('picThumbs').innerHTML='';document.getElementById('picUnmatched').innerHTML='';picStatus('Skip typing — Jarvis reads the stats from the pic 🤖')}}
   if(tab==='hist')renderHist();
   if(tab==='players')renderPlayers();
   window.scrollTo(0,0);
@@ -194,6 +203,98 @@ function scoreMatch(m){
   const rb=roundBonus(+m.round||0);
   if(rb>0){S.forEach(s=>bd[s.playerId]&&(bd[s.playerId].total+=rb,bd[s.playerId].notes.push(`🧟 round ${m.round} +${rb}`)))}
   return bd;
+}
+
+/* ---------- scoreboard pic + AI parse ---------- */
+const FN_BASE='https://solene-11f8ed2a.base44.app/functions';
+let DEV_ID=localStorage.getItem('bol_device');
+if(!DEV_ID){DEV_ID=Math.random().toString(36).slice(2,12);localStorage.setItem('bol_device',DEV_ID)}
+let pendingPics=[];
+function picStatus(msg){document.getElementById('picStatus').textContent=msg}
+function compressFile(file,size,q){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{const img=new Image();img.onload=()=>{
+      let w=img.width,h=img.height;if(Math.max(w,h)>size){const k=size/Math.max(w,h);w=Math.round(w*k);h=Math.round(h*k)}
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      res(c.toDataURL('image/jpeg',q));
+    };img.onerror=rej;img.src=fr.result};
+    fr.onerror=rej;fr.readAsDataURL(file);
+  });
+}
+function dataUrlToThumb(dataUrl,size,q){
+  return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{
+    let w=img.width,h=img.height;const k=Math.min(1,size/Math.max(w,h));w=Math.round(w*k);h=Math.round(h*k);
+    const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+    res(c.toDataURL('image/jpeg',q))};img.onerror=rej;img.src=dataUrl});
+}
+async function picChosen(inp){
+  const files=[...inp.files].slice(0,3);inp.value='';
+  for(const f of files){
+    if(pendingPics.length>=3){toast('Max 3 pics per match');break}
+    try{
+      const dataUrl=await compressFile(f,1000,.72);
+      const thumb=await dataUrlToThumb(dataUrl,420,.62);
+      const pic={thumb,parseId:null};
+      pendingPics.push(pic);renderThumbs();
+      uploadPic(pic,dataUrl);
+    }catch(e){toast('Could not read that image')}
+  }
+}
+function renderThumbs(){
+  document.getElementById('picThumbs').innerHTML=pendingPics.map(p=>`<img src="${p.thumb}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">`).join('');
+}
+async function uploadPic(pic,dataUrl){
+  picStatus('📤 Uploading…');
+  try{
+    const r=await fetch(FN_BASE+'/bolUploadPic',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl,deviceId:DEV_ID})});
+    const j=await r.json();if(!j.ok)throw new Error(j.error||'upload failed');
+    pic.parseId=j.id;picStatus('🤖 Jarvis is reading the scoreboard…');
+    for(let i=0;i<45;i++){
+      await new Promise(r=>setTimeout(r,4000));
+      let s;try{s=await(await fetch(FN_BASE+'/bolParseStatus?id='+pic.parseId)).json()}catch(e){continue}
+      if(s.ok&&s.status==='done'){applyParse(JSON.parse(s.resultJson));picStatus('✅ Stats pulled — check the form below');return}
+      if(s.ok&&s.status==='error'){picStatus('⚠️ '+(s.errorNote||"couldn't read that pic"));return}
+    }
+    picStatus('⚠️ Read timed out — enter stats manually');
+  }catch(e){picStatus('⚠️ '+e.message)}
+}
+function normName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
+function fuzzyFindPlayer(n){
+  const t=normName(n);if(!t)return null;
+  return DB.players.find(p=>{const a=normName(p.name),b=normName(p.tag||'');
+    return a===t||b===t||(a.length>2&&(t.includes(a)||a.includes(t)))||(b.length>2&&(t.includes(b)||b.includes(t)))})||null;
+}
+function applyParse(p){
+  if(!p)return;
+  if(p.round)setTimeout(()=>{const r=document.getElementById('mRound');if(r&&!r.value)r.value=p.round},50);
+  const fills=[],unmatched=[];
+  (p.players||[]).forEach(ps=>{
+    let pl=fuzzyFindPlayer(ps.name);
+    if(!pl){unmatched.push(ps);return}
+    picked.add(pl.id);fills.push({id:pl.id,ps});
+  });
+  renderMatchForm();
+  fills.forEach(f=>{
+    const set=(k,v)=>{const el=document.getElementById('st-'+k+'-'+f.id);if(el&&v!=null)el.value=v};
+    set('score',f.ps.score);set('kills',f.ps.kills);set('heads',f.ps.headshots);set('rev',f.ps.revives);
+  });
+  if(unmatched.length){
+    document.getElementById('picUnmatched').innerHTML=
+      '<div class="mini" style="margin-bottom:4px"> unrecognized — tap to add & fill:</div>'+
+      unmatched.map((ps,i)=>`<span class="chip" onclick="addFromPic(${JSON.stringify(ps).replace(/"/g,'&quot;')})">➕ ${esc(ps.name)}</span>`).join('');
+  }else document.getElementById('picUnmatched').innerHTML='';
+  if(p.survivorHint){
+    const pl=fuzzyFindPlayer(p.survivorHint);
+    if(pl)setTimeout(()=>{const s=document.getElementById('mSurvivor');if(s)s.value=pl.id},100);
+  }
+}
+function addFromPic(ps){
+  if(DB.players.some(p=>normName(p.name)===normName(ps.name)))return;
+  DB.players.push({id:uid(),name:ps.name,tag:'',created:new Date().toISOString()});
+  save();applyParse({players:[ps]});
+  toast('👤 '+ps.name+' added + stats filled');
 }
 
 /* ---------- players ---------- */
@@ -285,8 +386,9 @@ function saveMatch(){
   const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
     mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats};
   m.points=scoreMatch(m);
+  m.pics=pendingPics.map(p=>p.thumb);
   DB.matches.push(m);save();
-  picked.clear();
+  picked.clear();pendingPics=[];
   document.getElementById('mRound').value='';
   renderMatchForm();
   const tot=Object.values(m.points).reduce((a,b)=>a+b.total,0);
@@ -307,6 +409,7 @@ function renderHist(){
         <span class="mini">round ${m.round||'—'}</span>
       </div>
       ${m.survivor?`<div class="mini">🏆 last survivor: ${esc(pname(m.survivor))}</div>`:''}
+      ${m.pics&&m.pics.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${m.pics.map((t,i)=>`<img src="${t}" onclick="viewPic(this)" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer">`).join('')}</div>`:''}
       <div style="margin-top:8px">${m.stats.map(s=>{const p=m.points[s.playerId]||{total:0,notes:[]};
         return `<div class="mrow"><span>${esc(pname(s.playerId))}<span class="mini"> · ${s.kills}k ${s.headshots}hs ${s.revives}rev</span></span><b>+${p.total}</b></div>
         <div class="breakdown">${p.notes.map(n=>`<em>${n.split('+')[0].trim()}</em> +${n.split('+')[1]||''}`).join(' · ')}</div>`}).join('')}
@@ -315,6 +418,7 @@ function renderHist(){
     </div>`;
   }).join('');
 }
+function viewPic(el){document.getElementById('picOverlayImg').src=el.src;document.getElementById('picOverlay').style.display='flex'}
 function delMatch(id){
   if(!confirm('Delete this match? Leaderboard will update.'))return;
   DB.matches=DB.matches.filter(m=>m.id!==id);save();renderHist();toast('Match deleted');
