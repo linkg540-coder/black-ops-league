@@ -37,6 +37,11 @@ button{font-family:inherit}
 .btn.danger{background:transparent;border:1px solid var(--danger);color:var(--danger);font-weight:600}
 .chip{display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:.88rem;margin:4px 4px 0 0;user-select:none}
 .chip.on{border-color:var(--green);background:rgba(107,203,38,.14);color:var(--green);font-weight:700}
+.placegrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:7px}
+.placepick{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px}
+.placepick label{margin:0 0 5px;font-size:.72rem}
+.placepick select{padding:9px 10px}
+@media(max-width:390px){.placegrid{grid-template-columns:1fr}}
 .row{display:flex;gap:10px}.row>*{flex:1}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
@@ -103,9 +108,10 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <select id="mMode">
         <option>Solo</option><option>2-Player</option><option>3-Player</option><option>4-Player</option>
       </select>
-      <label>Who played?</label>
-      <div id="mPlayers"></div>
-      <div class="empty" id="mNoPlayers" style="display:none">Add players in the 👥 tab first</div>
+      <label>Assign scoreboard positions</label>
+      <div class="mini">Choose who appears in each scoreboard row. Jarvis applies the uploaded stats in this order.</div>
+      <div id="mPlayers" class="placegrid"></div>
+      <div class="empty" id="mNoPlayers" style="display:none">Add at least 4 players in the 👥 tab first</div>
       <label>Team round reached</label>
       <input type="number" id="mRound" min="1" placeholder="e.g. 27">
       <label>Last survivor 🏆</label>
@@ -168,7 +174,7 @@ function go(tab){
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
   document.querySelectorAll('nav button').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
   if(tab==='board')renderBoard();
-  if(tab==='match'){renderMatchForm();if(!pendingPics.length){pendingStats={};document.getElementById('picThumbs').innerHTML='';document.getElementById('picUnmatched').innerHTML='';document.getElementById('picReadout').innerHTML='';picStatus('Required — Jarvis reads the stats from the pic 🤖')}}
+  if(tab==='match'){renderMatchForm();if(!pendingPics.length){pendingStats={};pendingParsedRows=[];document.getElementById('picThumbs').innerHTML='';document.getElementById('picUnmatched').innerHTML='';document.getElementById('picReadout').innerHTML='';picStatus('Required — Jarvis reads the stats from the pic 🤖')}}
   if(tab==='hist')renderHist();
   if(tab==='players')renderPlayers();
   window.scrollTo(0,0);
@@ -267,46 +273,35 @@ async function uploadPic(pic,dataUrl){
     picStatus('⚠️ Read timed out — retake the pic with the scoreboard visible');
   }catch(e){picStatus('⚠️ '+e.message)}
 }
-function normName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
-function fuzzyFindPlayer(n){
-  const t=normName(n);if(!t)return null;
-  return DB.players.find(p=>{const a=normName(p.name),b=normName(p.tag||'');
-    return a===t||b===t||(a.length>2&&(t.includes(a)||a.includes(t)))||(b.length>2&&(t.includes(b)||b.includes(t)))})||null;
-}
 function applyParse(p){
   if(!p)return;
   if(p.round)setTimeout(()=>{const r=document.getElementById('mRound');if(r&&!r.value)r.value=p.round},50);
-  const unmatched=[];
-  (p.players||[]).forEach(ps=>{
-    let pl=fuzzyFindPlayer(ps.name);
-    if(!pl){unmatched.push(ps);return}
-    picked.add(pl.id);
-    pendingStats[pl.id]={score:+ps.score||0,kills:+ps.kills||0,headshots:+ps.headshots||0,revives:+ps.revives||0};
-  });
-  renderMatchForm();
+  pendingParsedRows=(p.players||[]).map(ps=>({
+    name:ps.name||'',score:+ps.score||0,kills:+ps.kills||0,
+    headshots:+ps.headshots||0,revives:+ps.revives||0
+  })).sort((a,b)=>b.score-a.score).slice(0,4);
+  syncAssignments();
   renderReadout();
-  if(unmatched.length){
-    document.getElementById('picUnmatched').innerHTML=
-      '<div class="mini" style="margin-bottom:4px"> unrecognized — tap to add & fill:</div>'+
-      unmatched.map((ps,i)=>`<span class="chip" onclick="addFromPic(${JSON.stringify(ps).replace(/"/g,'&quot;')})">➕ ${esc(ps.name)}</span>`).join('');
-  }else document.getElementById('picUnmatched').innerHTML='';
-  if(p.survivorHint){
-    const pl=fuzzyFindPlayer(p.survivorHint);
-    if(pl)setTimeout(()=>{const s=document.getElementById('mSurvivor');if(s)s.value=pl.id},100);
-  }
+  document.getElementById('picUnmatched').innerHTML='';
+  picStatus(pendingParsedRows.length>=4?'✅ Scoreboard read — assign all 4 positions below':'⚠️ Only '+pendingParsedRows.length+' scoreboard rows found — upload a clearer image');
 }
+function syncAssignments(){
+  pendingStats={};
+  for(let i=0;i<4;i++){
+    const el=document.getElementById('mPlace'+i),id=el&&el.value,row=pendingParsedRows[i];
+    if(id&&row)pendingStats[id]={score:row.score,kills:row.kills,headshots:row.headshots,revives:row.revives};
+  }
+  const survivor=document.getElementById('mSurvivor'),cur=survivor&&survivor.value;
+  if(survivor){const ids=getPlaceIds();survivor.innerHTML='<option value="">— nobody —</option>'+ids.map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('')}
+  renderReadout();
+}
+function getPlaceIds(){return[0,1,2,3].map(i=>{const e=document.getElementById('mPlace'+i);return e?e.value:''}).filter(Boolean)}
 function renderReadout(){
   const el=document.getElementById('picReadout');if(!el)return;
-  const ids=Object.keys(pendingStats);
-  el.innerHTML=ids.length?'<div class="mini" style="margin-bottom:4px">🤖 Stats read from the pic:</div>'+
-    ids.map(id=>{const s=pendingStats[id];
-      return `<div class="mini">👤 ${esc(pname(id))} — ${s.score} pts · ${s.kills} kills · ${s.headshots} hs · ${s.revives} revives</div>`}).join(''):'';
-}
-function addFromPic(ps){
-  if(DB.players.some(p=>normName(p.name)===normName(ps.name)))return;
-  DB.players.push({id:uid(),name:ps.name,tag:'',created:new Date().toISOString()});
-  save();applyParse({players:[ps]});
-  toast('👤 '+ps.name+' added + stats filled');
+  el.innerHTML=pendingParsedRows.length?'<div class="mini" style="margin-bottom:5px">🤖 Scoreboard rows read from the pic:</div>'+pendingParsedRows.map((r,i)=>{
+    const id=document.getElementById('mPlace'+i)?.value;
+    return `<div class="mini" style="padding:3px 0"><b>${i+1}${['st','nd','rd','th'][i]}:</b> ${id?esc(pname(id)):'not assigned'} · ${r.score} score · ${r.kills} kills · ${r.headshots} hs · ${r.revives} revives</div>`
+  }).join(''):'';
 }
 
 /* ---------- players ---------- */
@@ -357,36 +352,38 @@ function renderBoard(){
 }
 
 /* ---------- new match ---------- */
-let picked=new Set(),pendingStats={};
+let pendingStats={},pendingParsedRows=[];
 function renderMatchForm(){
   document.getElementById('mDate').value=document.getElementById('mDate').value||new Date().toISOString().slice(0,10);
   const pw=document.getElementById('mPlayers'),np=document.getElementById('mNoPlayers');
-  if(!DB.players.length){pw.innerHTML='';np.style.display='block';return}
+  if(DB.players.length<4){pw.innerHTML='';np.style.display='block';return}
   np.style.display='none';
-  pw.innerHTML=DB.players.map(p=>`<span class="chip ${picked.has(p.id)?'on':''}" onclick="togglePick('${p.id}')">${picked.has(p.id)?'✔ ':''}${esc(p.name)}</span>`).join('');
+  const previous=[0,1,2,3].map(i=>document.getElementById('mPlace'+i)?.value||'');
+  const medals=['🥇 1st','🥈 2nd','🥉 3rd','4️⃣ 4th'];
+  pw.innerHTML=medals.map((label,i)=>`<div class="placepick"><label>${label}</label><select id="mPlace${i}" onchange="syncAssignments()"><option value="">Select player</option>${DB.players.map(p=>`<option value="${p.id}" ${previous[i]===p.id?'selected':''}>${esc(p.name)}${p.tag?' (@'+esc(p.tag)+')':''}</option>`).join('')}</select></div>`).join('');
   const sel=document.getElementById('mSurvivor'),cur=sel.value;
-  sel.innerHTML='<option value="">— nobody —</option>'+[...picked].map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('');
-
+  sel.innerHTML='<option value="">— nobody —</option>'+getPlaceIds().map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('');
+  syncAssignments();
 }
-function togglePick(id){picked.has(id)?picked.delete(id):picked.add(id);renderMatchForm()}
 function saveMatch(){
-  const ids=[...picked];
-  if(!ids.length)return toast('Pick who played first');
+  const ids=getPlaceIds();
+  if(DB.players.length<4)return toast('Add at least 4 players first');
+  if(ids.length!==4)return toast('Assign 1st, 2nd, 3rd, and 4th place');
+  if(new Set(ids).size!==4)return toast('Each position needs a different player');
   if(!pendingPics.length)return toast('📷 End-game scoreboard pic is required');
+  if(pendingParsedRows.length<4)return toast('Wait for Jarvis to read all 4 scoreboard rows');
+  syncAssignments();
   const round=+document.getElementById('mRound').value||0;
   const stats=ids.map(id=>({playerId:id,
-    score:(pendingStats[id]&&+pendingStats[id].score)||0,
-    kills:(pendingStats[id]&&+pendingStats[id].kills)||0,
-    headshots:(pendingStats[id]&&+pendingStats[id].headshots)||0,
-    revives:(pendingStats[id]&&+pendingStats[id].revives)||0}));
-  const hasAny=stats.some(s=>s.score||s.kills||s.headshots||s.revives);
-  if(!hasAny&&round<1)return toast('Pic not read yet — wait for Jarvis or retake the pic');
+    score:+pendingStats[id].score||0,kills:+pendingStats[id].kills||0,
+    headshots:+pendingStats[id].headshots||0,revives:+pendingStats[id].revives||0}));
   const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
-    mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats};
+    mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats,
+    placements:[...ids]};
   m.points=scoreMatch(m);
   m.pics=pendingPics.map(p=>p.thumb);
   DB.matches.push(m);save();
-  picked.clear();pendingPics=[];pendingStats={};
+  pendingPics=[];pendingStats={};pendingParsedRows=[];
   document.getElementById('mRound').value='';
   renderMatchForm();
   const tot=Object.values(m.points).reduce((a,b)=>a+b.total,0);
