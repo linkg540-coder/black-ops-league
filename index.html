@@ -117,9 +117,9 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
         <option>Solo</option><option>2-Player</option><option>3-Player</option><option>4-Player</option>
       </select>
       <label>Assign players to scoreboard columns</label>
-      <div class="mini">Manually choose the player shown in each column. Every player receives points only from their own column.</div>
+      <div class="mini">AI reads the player names and fills each column. Review the names and placements before saving. New players are added to the roster when the match is saved.</div>
       <div id="mPlayers" class="placegrid"></div>
-      <div class="empty" id="mNoPlayers" style="display:none">Add at least 4 players in the 👥 tab first</div>
+      <div class="empty" id="mNoPlayers" style="display:none">Upload a scoreboard picture to detect players, or add them in the Players tab.</div>
       <label>Team round reached</label>
       <div class="mini">AI fills the round if it is visible in the photo. Enter it yourself if needed.</div>
       <input type="number" id="mRound" min="1" placeholder="e.g. 27">
@@ -285,17 +285,25 @@ function applyParse(p){
   if(Number.isInteger(Number(p.round))&&Number(p.round)>0&&!round.value)round.value=Number(p.round);
   const stat=v=>v===null||v===undefined||v===''?null:(Number.isFinite(Number(v))&&Number(v)>=0?Number(v):null);
   pendingParsedRows=(Array.isArray(p.players)?p.players:[]).map(ps=>({
-    name:ps.name||'',score:stat(ps.score),kills:stat(ps.kills),
+    name:cleanPlayerName(ps.name),score:stat(ps.score),kills:stat(ps.kills),
     headshots:stat(ps.headshots),revives:stat(ps.revives)
   })).slice(0,4);
-  syncAssignments();
+  document.getElementById('mPlayers').innerHTML='';
+  if(pendingParsedRows.length>=1&&pendingParsedRows.length<=4){
+    document.getElementById('mMode').value=pendingParsedRows.length===1?'Solo':pendingParsedRows.length+'-Player';
+  }
+  renderMatchForm();
   renderReadout();
   document.getElementById('picUnmatched').innerHTML='';
   const need=requiredPlayerCount();
   const missing=pendingParsedRows.slice(0,need).some(row=>['score','kills','headshots','revives'].some(k=>row[k]===null));
-  picStatus(pendingParsedRows.length<need?'⚠️ Only '+pendingParsedRows.length+' of '+need+' player columns found — upload a clearer image':missing?'⚠️ Some stats are unreadable — upload a clearer picture':'✅ Player stats read. Check the detected map and round below.');
+  picStatus(pendingParsedRows.length<need?'⚠️ Only '+pendingParsedRows.length+' of '+need+' player columns found — upload a clearer image':missing?'⚠️ Some stats are unreadable — upload a clearer picture':'✅ Player names and stats read. Review the column assignments, map and round.');
 }
 function requiredPlayerCount(){const m=document.getElementById('mMode')?.value||'4-Player';return m==='Solo'?1:(parseInt(m)||4)}
+function cleanPlayerName(value){const name=String(value||'').trim().replace(/\s+/g,' ').slice(0,40);return /^(player|unknown|unreadable|n\/?a|none|\?+|[-–—]+)$/i.test(name)?'':name}
+function nameKey(value){return String(value||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase()}
+function matchingPlayer(name){if(!name)return null;const key=nameKey(name),found=DB.players.filter(p=>nameKey(p.name)===key||(p.tag&&nameKey(p.tag)===key));return found.length===1?found[0]:null}
+function toggleNewName(i){const sel=document.getElementById('mPlace'+i),field=document.getElementById('mNewName'+i);if(field)field.style.display=sel&&sel.value==='new:'+i?'block':'none';syncAssignments()}
 function syncAssignments(){
   pendingStats={};
   const count=requiredPlayerCount();
@@ -312,7 +320,8 @@ function renderReadout(){
   el.innerHTML=rows.length?'<div class="mini" style="margin-bottom:5px">🤖 '+rows.length+' player column'+(rows.length===1?'':'s')+' read from the pic:</div>'+rows.map((r,i)=>{
     const id=document.getElementById('mPlace'+i)?.value;
     const show=v=>v===null?'not readable':v;
-    return `<div class="mini" style="padding:3px 0"><b>${i+1}${['st','nd','rd','th'][i]}:</b> ${id?esc(pname(id)):'not assigned'} · ${show(r.score)} score · ${show(r.kills)} kills · ${show(r.headshots)} hs · ${show(r.revives)} revives</div>`
+    const name=id==='new:'+i?cleanPlayerName(document.getElementById('mNewName'+i)?.value):id?pname(id):'';
+    return `<div class="mini" style="padding:3px 0"><b>${i+1}${['st','nd','rd','th'][i]}:</b> ${name?esc(name):'not assigned'} · ${show(r.score)} score · ${show(r.kills)} kills · ${show(r.headshots)} hs · ${show(r.revives)} revives</div>`
   }).join(''):'';
 }
 
@@ -369,38 +378,63 @@ function renderMatchForm(){
   document.getElementById('mDate').value=document.getElementById('mDate').value||new Date().toISOString().slice(0,10);
   const pw=document.getElementById('mPlayers'),np=document.getElementById('mNoPlayers');
   const count=requiredPlayerCount();
-  if(DB.players.length<count){pw.innerHTML='';np.style.display='block';np.textContent='Add at least '+count+' player'+(count===1?'':'s')+' in the 👥 tab first';return}
-  np.style.display='none';
+  np.style.display=DB.players.length||pendingParsedRows.length?'none':'block';
   const previous=Array.from({length:4},(_,i)=>document.getElementById('mPlace'+i)?.value||'');
+  const edited=Array.from({length:4},(_,i)=>document.getElementById('mNewName'+i)?.value);
+  const used=new Set();
   const medals=['1️⃣ 1st column','2️⃣ 2nd column','3️⃣ 3rd column','4️⃣ 4th column'].slice(0,count);
-  pw.innerHTML=medals.map((label,i)=>`<div class="placepick"><label>${label}</label><select id="mPlace${i}" onchange="syncAssignments()"><option value="">Select player</option>${DB.players.map(p=>`<option value="${p.id}" ${previous[i]===p.id?'selected':''}>${esc(p.name)}${p.tag?' (@'+esc(p.tag)+')':''}</option>`).join('')}</select></div>`).join('');
+  pw.innerHTML=medals.map((label,i)=>{
+    const readName=cleanPlayerName(pendingParsedRows[i]?.name),found=matchingPlayer(readName);
+    let selected=previous[i]||((found&&!used.has(found.id))?found.id:readName?'new:'+i:'');
+    if(selected.startsWith('new:')&&selected!=='new:'+i)selected='new:'+i;
+    if(selected)used.add(selected);
+    const name=edited[i]===undefined?readName:edited[i];
+    return `<div class="placepick"><label>${label}${readName?' · AI: '+esc(readName):''}</label><select id="mPlace${i}" onchange="toggleNewName(${i})"><option value="">Select player</option>${DB.players.map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${esc(p.name)}${p.tag?' (@'+esc(p.tag)+')':''}</option>`).join('')}<option value="new:${i}" ${selected==='new:'+i?'selected':''}>Add new player${readName?' ('+esc(readName)+')':''}</option></select><input id="mNewName${i}" maxlength="40" placeholder="Player name from the picture" value="${esc(name)}" oninput="renderReadout()" style="display:${selected==='new:'+i?'block':'none'};margin-top:7px"></div>`;
+  }).join('');
   syncAssignments();
 }
 function saveMatch(){
   const map=document.getElementById('mMap').value;
   if(!BO3_MAPS.includes(map))return toast('Select a BO3 map first');
-  const count=requiredPlayerCount(),ids=getPlaceIds();
-  if(DB.players.length<count)return toast('Add at least '+count+' player'+(count===1?'':'s')+' first');
-  if(ids.length!==count)return toast('Assign all '+count+' scoreboard column'+(count===1?'':'s'));
-  if(new Set(ids).size!==count)return toast('Each column needs a different player');
+  const count=requiredPlayerCount(),selections=getPlaceIds();
+  if(selections.length!==count)return toast('Assign all '+count+' scoreboard column'+(count===1?'':'s'));
+  if(new Set(selections).size!==count)return toast('Each column needs a different player');
   if(!pendingPics.length)return toast('📷 End-game scoreboard pic is required');
   if(pendingParsedRows.length<count)return toast('Wait for AI to read '+count+' scoreboard column'+(count===1?'':'s'));
   if(pendingParsedRows.slice(0,count).some(row=>['score','kills','headshots','revives'].some(k=>row[k]===null)))return toast('Some stats are unreadable — upload a clearer image');
-  syncAssignments();
-  const round=+document.getElementById('mRound').value||0;
+  const round=Number(document.getElementById('mRound').value);
   if(!Number.isInteger(round)||round<1)return toast('Enter the round shown in the photo');
-  const stats=ids.map(id=>({playerId:id,
-    score:+pendingStats[id].score||0,kills:+pendingStats[id].kills||0,
-    headshots:+pendingStats[id].headshots||0,revives:+pendingStats[id].revives||0}));
+  const newPlayers=[],seen=new Set();
+  for(let i=0;i<count;i++){
+    const choice=selections[i];
+    if(choice==='new:'+i){
+      const name=cleanPlayerName(document.getElementById('mNewName'+i)?.value);
+      if(!name)return toast('Enter the name for column '+(i+1));
+      if(matchingPlayer(name))return toast('"'+name+'" already exists; select that player instead');
+      if(seen.has(nameKey(name)))return toast('Each column needs a different player name');
+      newPlayers.push({column:i,id:uid(),name,tag:'',created:new Date().toISOString()});
+      seen.add(nameKey(name));
+    }else{
+      const player=DB.players.find(p=>p.id===choice);
+      if(!player)return toast('Choose a valid player for column '+(i+1));
+      if(seen.has(nameKey(player.name)))return toast('Each column needs a different player');
+      seen.add(nameKey(player.name));
+    }
+  }
+  const ids=selections.map((choice,i)=>choice==='new:'+i?newPlayers.find(p=>p.column===i).id:choice);
+  const stats=ids.map((id,i)=>({playerId:id,score:pendingParsedRows[i].score,kills:pendingParsedRows[i].kills,headshots:pendingParsedRows[i].headshots,revives:pendingParsedRows[i].revives}));
   const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
-    map,mode:document.getElementById('mMode').value,round,stats,
-    placements:[...ids]};
+    map,mode:document.getElementById('mMode').value,round,stats,placements:[...ids]};
   m.rule=mapRule(map);
   m.points=scoreMatch(m,m.rule);
   m.pics=pendingPics.map(p=>p.thumb);
+  DB.players.push(...newPlayers.map(({column,...player})=>player));
   DB.matches.push(m);save();
   pendingPics=[];pendingStats={};pendingParsedRows=[];
   document.getElementById('mRound').value='';
+  document.getElementById('mMap').value='';
+  document.getElementById('mPlayers').innerHTML='';
+  renderMatchRubricPreview();
   renderMatchForm();
   const tot=Object.values(m.points).reduce((a,b)=>a+b.total,0);
   toast('✅ Match logged — '+tot+' league points awarded');
