@@ -77,6 +77,10 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 .rubricrow{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:.88rem}
 .rubricrow:last-child{border:0}
 .rubricrow b{color:var(--green);white-space:nowrap}
+.rulegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.rulegrid label{font-size:.76rem;margin:0 0 5px}
+.rulegrid input{width:100%;box-sizing:border-box}
+@media(max-width:390px){.rulegrid{grid-template-columns:1fr}}
 @media(min-width:521px){.wrap{padding-top:26px}}
 </style>
 </head>
@@ -104,6 +108,9 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
     <div class="card">
       <label>Match date</label>
       <input type="date" id="mDate">
+      <label>BO3 Zombies map</label>
+      <select id="mMap" onchange="renderMatchRubricPreview()"></select>
+      <div class="mini" id="mMapRubric" style="margin-top:7px"></div>
       <label>Game mode</label>
       <select id="mMode" onchange="renderMatchForm()">
         <option>Solo</option><option>2-Player</option><option>3-Player</option><option>4-Player</option>
@@ -139,17 +146,13 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   <!-- RUBRIC -->
   <section class="view" id="v-rubric">
     <div class="card">
-      <div class="rubricrow"><span>🏆 Highest in-game score</span><b>+3</b></div>
-      <div class="rubricrow"><span>💀 Most kills</span><b>+2</b></div>
-      <div class="rubricrow"><span>🎯 Most headshots</span><b>+2</b></div>
-      <div class="rubricrow"><span>❤️ Each revive</span><b>+2 each</b></div>
-      <div class="rubricrow"><span>🥇 Last survivor</span><b>+3</b></div>
-      <div class="rubricrow"><span>🧟 Round 11–20 (team)</span><b>+2</b></div>
-      <div class="rubricrow"><span>🧟 Round 21–30 (team)</span><b>+4</b></div>
-      <div class="rubricrow"><span>🧟 Round 31–40 (team)</span><b>+6</b></div>
-      <div class="rubricrow"><span>🧟 Round 41–50 (team)</span><b>+8</b></div>
-      <div class="rubricrow"><span>🧟 Round 51+ (team)</span><b>+10</b></div>
-      <p class="mini" style="margin-top:12px">Round bonuses stack as the team climbs (round 27 = +2 +4 = +6, everyone in the match). "Most" categories: tied leaders all get the points. Team round bonus applies to every player in the match.</p>
+      <label>Map scoring rules</label>
+      <div class="mini">Choose a map to change its points. Each map starts with the existing league rubric. Changes apply only to new matches; saved match totals stay the same.</div>
+      <select id="rMap" onchange="renderRubricEditor()" style="margin-top:10px"></select>
+      <div id="rFields" class="rulegrid"></div>
+      <button class="btn ghost" onclick="saveMapRubric()" style="margin-top:12px">Save points for this map</button>
+      <button class="btn ghost" onclick="resetMapRubric()" style="margin-top:8px">Reset this map to default</button>
+      <p class="mini" style="margin-top:12px">Round bonuses stack as the team climbs (round 27 = the round 11 and round 21 bonuses). Tied leaders all earn the category points. Round points go to every player.</p>
     </div>
   </section>
 </div>
@@ -163,6 +166,15 @@ const KEY='bol_data';
 let DB=load();
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{players:[],matches:[]}}catch(e){return{players:[],matches:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB))}
+const BO3_MAPS=['Shadows of Evil','The Giant','Der Eisendrache','Zetsubou No Shima','Gorod Krovi','Revelations','Nacht der Untoten','Verrückt','Shi No Numa','Kino der Toten','Ascension','Shangri-La','Moon','Origins'];
+const DEFAULT_RULE={score:3,kills:2,headshots:2,revives:2,survivor:3,round11:2,round21:4,round31:6,round41:8,round51:10};
+const RULE_FIELDS=[['score','Highest in-game score'],['kills','Most kills'],['headshots','Most headshots'],['revives','Each revive'],['survivor','Last survivor'],['round11','Round 11–20'],['round21','Round 21–30'],['round31','Round 31–40'],['round41','Round 41–50'],['round51','Round 51+']];
+function mapRule(name){return {...DEFAULT_RULE,...((DB.mapRubrics||{})[name]||{})}}
+function initMaps(){const opts='<option value="">Select a BO3 map</option>'+BO3_MAPS.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');document.getElementById('mMap').innerHTML=opts;document.getElementById('rMap').innerHTML=opts}
+function renderMatchRubricPreview(){const map=document.getElementById('mMap').value,el=document.getElementById('mMapRubric');if(!map){el.textContent='Select a map to use its points rubric.';return}const r=mapRule(map);el.textContent='Map points: top score +'+r.score+' · kills +'+r.kills+' · headshots +'+r.headshots+' · revives +'+r.revives+' each · survivor +'+r.survivor+' · round bonuses '+[r.round11,r.round21,r.round31,r.round41,r.round51].map(n=>'+'+n).join(', ')}
+function renderRubricEditor(){const map=document.getElementById('rMap').value,el=document.getElementById('rFields');if(!map){el.innerHTML='';return}const rule=mapRule(map);el.innerHTML=RULE_FIELDS.map(([key,label])=>`<div><label for="rule-${key}">${esc(label)}</label><input id="rule-${key}" type="number" min="0" max="1000" step="1" value="${rule[key]}"></div>`).join('')}
+function saveMapRubric(){const map=document.getElementById('rMap').value;if(!map)return toast('Select a map first');const rule={};for(const[key]of RULE_FIELDS){const el=document.getElementById('rule-'+key),v=Number(el.value);if(el.value.trim()===''||!Number.isInteger(v)||v<0||v>1000)return toast('Use whole points from 0 to 1000');rule[key]=v}DB.mapRubrics=DB.mapRubrics||{};DB.mapRubrics[map]=rule;save();renderMatchRubricPreview();toast('Points saved for '+map)}
+function resetMapRubric(){const map=document.getElementById('rMap').value;if(!map)return toast('Select a map first');if(DB.mapRubrics)delete DB.mapRubrics[map];save();renderRubricEditor();renderMatchRubricPreview();toast('Default points restored for '+map)}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
 function uid(){return Math.random().toString(36).slice(2,10)}
@@ -177,6 +189,7 @@ function go(tab){
   if(tab==='match'){renderMatchForm();if(!pendingPics.length){pendingStats={};pendingParsedRows=[];document.getElementById('picThumbs').innerHTML='';document.getElementById('picUnmatched').innerHTML='';document.getElementById('picReadout').innerHTML='';picStatus('Required — Jarvis reads the stats from the pic 🤖')}}
   if(tab==='hist')renderHist();
   if(tab==='players')renderPlayers();
+  if(tab==='rubric')renderRubricEditor();
   window.scrollTo(0,0);
 }
 function buildNav(){
@@ -184,27 +197,19 @@ function buildNav(){
   document.getElementById('nav').innerHTML=TABS.map(([id,icon,label])=>`<button onclick="go('${id}')"><div>${icon}</div>${label}</button>`).join('');
 }
 
-/* ---------- scoring per rubric ---------- */
-function roundBonus(round){
-  // cumulative bands: 11-20 +2, 21-30 +4, 31-40 +6, 41-50 +8, 51+ +10
-  const bands=[[51,10],[41,8],[31,6],[21,4],[11,2]];
-  let pts=0;
-  for(const[start,val]of bands){if(round>=start)pts+=val;}
-  return pts;
-}
+/* ---------- scoring per map rubric ---------- */
+function roundBonus(round,rule){let pts=0;for(const[start,key]of [[11,'round11'],[21,'round21'],[31,'round31'],[41,'round41'],[51,'round51']])if(round>=start)pts+=rule[key];return pts}
 function maxOf(rows,key){if(!rows.length)return[];const m=Math.max(...rows.map(r=>+r[key]||0));if(m<=0)return[];return rows.filter(r=>+r[key]===m).map(r=>r.playerId)}
-function scoreMatch(m){
-  // m = {round, survivor, stats:[{playerId,score,kills,headshots,revives}]}
-  const S=m.stats,bd={};
+function scoreMatch(m,rule){
+  const r=rule||mapRule(m.map),S=m.stats,bd={};
   S.forEach(s=>bd[s.playerId]={total:0,notes:[]});
-  const award=(ids,label,pts)=>{ids.forEach(id=>{if(bd[id]){bd[id].total+=pts;bd[id].notes.push(`${label} +${pts}`)}})};
-  award(maxOf(S,'score'),'🏆 top score',3);
-  award(maxOf(S,'kills'),'💀 most kills',2);
-  award(maxOf(S,'headshots'),'🎯 most headshots',2);
-  S.forEach(s=>{const r=+s.revives||0;if(r>0&&bd[s.playerId]){bd[s.playerId].total+=r*2;bd[s.playerId].notes.push(`❤️ ${r} revives +${r*2}`)}});
-  if(m.survivor&&bd[m.survivor]){bd[m.survivor].total+=3;bd[m.survivor].notes.push('🥇 last survivor +3')}
-  const rb=roundBonus(+m.round||0);
-  if(rb>0){S.forEach(s=>bd[s.playerId]&&(bd[s.playerId].total+=rb,bd[s.playerId].notes.push(`🧟 round ${m.round} +${rb}`)))}
+  const award=(ids,label,pts)=>{if(pts>0)ids.forEach(id=>{if(bd[id]){bd[id].total+=pts;bd[id].notes.push(`${label} +${pts}`)}})};
+  award(maxOf(S,'score'),'🏆 top score',r.score);
+  award(maxOf(S,'kills'),'💀 most kills',r.kills);
+  award(maxOf(S,'headshots'),'🎯 most headshots',r.headshots);
+  S.forEach(s=>{const n=+s.revives||0,pts=n*r.revives;if(pts>0&&bd[s.playerId]){bd[s.playerId].total+=pts;bd[s.playerId].notes.push(`❤️ ${n} revives +${pts}`)}});
+  if(m.survivor)award([m.survivor],'🥇 last survivor',r.survivor);
+  const rb=roundBonus(+m.round||0,r);if(rb>0)award(S.map(s=>s.playerId),`🧟 round ${m.round}`,rb);
   return bd;
 }
 
@@ -370,6 +375,8 @@ function renderMatchForm(){
   syncAssignments();
 }
 function saveMatch(){
+  const map=document.getElementById('mMap').value;
+  if(!BO3_MAPS.includes(map))return toast('Select a BO3 map first');
   const count=requiredPlayerCount(),ids=getPlaceIds();
   if(DB.players.length<count)return toast('Add at least '+count+' player'+(count===1?'':'s')+' first');
   if(ids.length!==count)return toast('Assign all '+count+' scoreboard column'+(count===1?'':'s'));
@@ -382,9 +389,10 @@ function saveMatch(){
     score:+pendingStats[id].score||0,kills:+pendingStats[id].kills||0,
     headshots:+pendingStats[id].headshots||0,revives:+pendingStats[id].revives||0}));
   const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
-    mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats,
+    map,mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats,
     placements:[...ids]};
-  m.points=scoreMatch(m);
+  m.rule=mapRule(map);
+  m.points=scoreMatch(m,m.rule);
   m.pics=pendingPics.map(p=>p.thumb);
   DB.matches.push(m);save();
   pendingPics=[];pendingStats={};pendingParsedRows=[];
@@ -404,7 +412,7 @@ function renderHist(){
     return `<div class="card histcard">
       <span class="del" onclick="delMatch('${m.id}')">🗑</span>
       <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-        <b>${fmtDate(m.date)} · ${esc(m.mode)}</b>
+        <b>${fmtDate(m.date)} · ${esc(m.map||'Map not recorded')} · ${esc(m.mode)}</b>
         <span class="mini">round ${m.round||'—'}</span>
       </div>
       ${m.survivor?`<div class="mini">🏆 last survivor: ${esc(pname(m.survivor))}</div>`:''}
@@ -423,6 +431,8 @@ function delMatch(id){
   DB.matches=DB.matches.filter(m=>m.id!==id);save();renderHist();toast('Match deleted');
 }
 
+initMaps();
+renderMatchRubricPreview();
 buildNav();
 go('board');
 </script>
