@@ -108,8 +108,8 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <select id="mMode">
         <option>Solo</option><option>2-Player</option><option>3-Player</option><option>4-Player</option>
       </select>
-      <label>Assign scoreboard positions</label>
-      <div class="mini">Choose who appears in each scoreboard row. Jarvis applies the uploaded stats in this order.</div>
+      <label>Assign players to scoreboard columns</label>
+      <div class="mini">Manually choose the player shown in each column. Every player receives points only from their own column.</div>
       <div id="mPlayers" class="placegrid"></div>
       <div class="empty" id="mNoPlayers" style="display:none">Add at least 4 players in the 👥 tab first</div>
       <label>Team round reached</label>
@@ -279,11 +279,11 @@ function applyParse(p){
   pendingParsedRows=(p.players||[]).map(ps=>({
     name:ps.name||'',score:+ps.score||0,kills:+ps.kills||0,
     headshots:+ps.headshots||0,revives:+ps.revives||0
-  })).sort((a,b)=>b.score-a.score).slice(0,4);
+  })).slice(0,4);
   syncAssignments();
   renderReadout();
   document.getElementById('picUnmatched').innerHTML='';
-  picStatus(pendingParsedRows.length>=4?'✅ Scoreboard read — assign all 4 positions below':'⚠️ Only '+pendingParsedRows.length+' scoreboard rows found — upload a clearer image');
+  picStatus(pendingParsedRows.length>=4?'✅ Scoreboard read — assign all 4 columns below':'⚠️ Only '+pendingParsedRows.length+' scoreboard columns found — upload a clearer image');
 }
 function syncAssignments(){
   pendingStats={};
@@ -298,7 +298,7 @@ function syncAssignments(){
 function getPlaceIds(){return[0,1,2,3].map(i=>{const e=document.getElementById('mPlace'+i);return e?e.value:''}).filter(Boolean)}
 function renderReadout(){
   const el=document.getElementById('picReadout');if(!el)return;
-  el.innerHTML=pendingParsedRows.length?'<div class="mini" style="margin-bottom:5px">🤖 Scoreboard rows read from the pic:</div>'+pendingParsedRows.map((r,i)=>{
+  el.innerHTML=pendingParsedRows.length?'<div class="mini" style="margin-bottom:5px">🤖 Scoreboard columns read from the pic:</div>'+pendingParsedRows.map((r,i)=>{
     const id=document.getElementById('mPlace'+i)?.value;
     return `<div class="mini" style="padding:3px 0"><b>${i+1}${['st','nd','rd','th'][i]}:</b> ${id?esc(pname(id)):'not assigned'} · ${r.score} score · ${r.kills} kills · ${r.headshots} hs · ${r.revives} revives</div>`
   }).join(''):'';
@@ -359,7 +359,7 @@ function renderMatchForm(){
   if(DB.players.length<4){pw.innerHTML='';np.style.display='block';return}
   np.style.display='none';
   const previous=[0,1,2,3].map(i=>document.getElementById('mPlace'+i)?.value||'');
-  const medals=['🥇 1st','🥈 2nd','🥉 3rd','4️⃣ 4th'];
+  const medals=['1️⃣ 1st column','2️⃣ 2nd column','3️⃣ 3rd column','4️⃣ 4th column'];
   pw.innerHTML=medals.map((label,i)=>`<div class="placepick"><label>${label}</label><select id="mPlace${i}" onchange="syncAssignments()"><option value="">Select player</option>${DB.players.map(p=>`<option value="${p.id}" ${previous[i]===p.id?'selected':''}>${esc(p.name)}${p.tag?' (@'+esc(p.tag)+')':''}</option>`).join('')}</select></div>`).join('');
   const sel=document.getElementById('mSurvivor'),cur=sel.value;
   sel.innerHTML='<option value="">— nobody —</option>'+getPlaceIds().map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('');
@@ -368,10 +368,10 @@ function renderMatchForm(){
 function saveMatch(){
   const ids=getPlaceIds();
   if(DB.players.length<4)return toast('Add at least 4 players first');
-  if(ids.length!==4)return toast('Assign 1st, 2nd, 3rd, and 4th place');
-  if(new Set(ids).size!==4)return toast('Each position needs a different player');
+  if(ids.length!==4)return toast('Assign a player to columns 1, 2, 3, and 4');
+  if(new Set(ids).size!==4)return toast('Each column needs a different player');
   if(!pendingPics.length)return toast('📷 End-game scoreboard pic is required');
-  if(pendingParsedRows.length<4)return toast('Wait for Jarvis to read all 4 scoreboard rows');
+  if(pendingParsedRows.length<4)return toast('Wait for Jarvis to read all 4 scoreboard columns');
   syncAssignments();
   const round=+document.getElementById('mRound').value||0;
   const stats=ids.map(id=>({playerId:id,
