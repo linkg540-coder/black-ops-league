@@ -109,6 +109,7 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <label>Match date</label>
       <input type="date" id="mDate">
       <label>BO3 Zombies map</label>
+      <div class="mini">AI fills the map if it can identify it in the photo. Choose it yourself if the map is not visible.</div>
       <select id="mMap" onchange="renderMatchRubricPreview()"></select>
       <div class="mini" id="mMapRubric" style="margin-top:7px"></div>
       <label>Game mode</label>
@@ -120,9 +121,8 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <div id="mPlayers" class="placegrid"></div>
       <div class="empty" id="mNoPlayers" style="display:none">Add at least 4 players in the 👥 tab first</div>
       <label>Team round reached</label>
+      <div class="mini">AI fills the round if it is visible in the photo. Enter it yourself if needed.</div>
       <input type="number" id="mRound" min="1" placeholder="e.g. 27">
-      <label>Last survivor 🏆</label>
-      <select id="mSurvivor"><option value="">— nobody —</option></select>
     </div>
     <button class="btn" onclick="saveMatch()">💾 Save match + score it</button>
   </section>
@@ -167,11 +167,11 @@ let DB=load();
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{players:[],matches:[]}}catch(e){return{players:[],matches:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB))}
 const BO3_MAPS=['Shadows of Evil','The Giant','Der Eisendrache','Zetsubou No Shima','Gorod Krovi','Revelations','Nacht der Untoten','Verrückt','Shi No Numa','Kino der Toten','Ascension','Shangri-La','Moon','Origins'];
-const DEFAULT_RULE={score:3,kills:2,headshots:2,revives:2,survivor:3,round11:2,round21:4,round31:6,round41:8,round51:10};
-const RULE_FIELDS=[['score','Highest in-game score'],['kills','Most kills'],['headshots','Most headshots'],['revives','Each revive'],['survivor','Last survivor'],['round11','Round 11–20'],['round21','Round 21–30'],['round31','Round 31–40'],['round41','Round 41–50'],['round51','Round 51+']];
+const DEFAULT_RULE={score:3,kills:2,headshots:2,revives:2,round11:2,round21:4,round31:6,round41:8,round51:10};
+const RULE_FIELDS=[['score','Highest in-game score'],['kills','Most kills'],['headshots','Most headshots'],['revives','Each revive'],['round11','Round 11–20'],['round21','Round 21–30'],['round31','Round 31–40'],['round41','Round 41–50'],['round51','Round 51+']];
 function mapRule(name){return {...DEFAULT_RULE,...((DB.mapRubrics||{})[name]||{})}}
 function initMaps(){const opts='<option value="">Select a BO3 map</option>'+BO3_MAPS.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');document.getElementById('mMap').innerHTML=opts;document.getElementById('rMap').innerHTML=opts}
-function renderMatchRubricPreview(){const map=document.getElementById('mMap').value,el=document.getElementById('mMapRubric');if(!map){el.textContent='Select a map to use its points rubric.';return}const r=mapRule(map);el.textContent='Map points: top score +'+r.score+' · kills +'+r.kills+' · headshots +'+r.headshots+' · revives +'+r.revives+' each · survivor +'+r.survivor+' · round bonuses '+[r.round11,r.round21,r.round31,r.round41,r.round51].map(n=>'+'+n).join(', ')}
+function renderMatchRubricPreview(){const map=document.getElementById('mMap').value,el=document.getElementById('mMapRubric');if(!map){el.textContent='Select a map to use its points rubric.';return}const r=mapRule(map);el.textContent='Map points: top score +'+r.score+' · kills +'+r.kills+' · headshots +'+r.headshots+' · revives +'+r.revives+' each · round bonuses '+[r.round11,r.round21,r.round31,r.round41,r.round51].map(n=>'+'+n).join(', ')}
 function renderRubricEditor(){const map=document.getElementById('rMap').value,el=document.getElementById('rFields');if(!map){el.innerHTML='';return}const rule=mapRule(map);el.innerHTML=RULE_FIELDS.map(([key,label])=>`<div><label for="rule-${key}">${esc(label)}</label><input id="rule-${key}" type="number" min="0" max="1000" step="1" value="${rule[key]}"></div>`).join('')}
 function saveMapRubric(){const map=document.getElementById('rMap').value;if(!map)return toast('Select a map first');const rule={};for(const[key]of RULE_FIELDS){const el=document.getElementById('rule-'+key),v=Number(el.value);if(el.value.trim()===''||!Number.isInteger(v)||v<0||v>1000)return toast('Use whole points from 0 to 1000');rule[key]=v}DB.mapRubrics=DB.mapRubrics||{};DB.mapRubrics[map]=rule;save();renderMatchRubricPreview();toast('Points saved for '+map)}
 function resetMapRubric(){const map=document.getElementById('rMap').value;if(!map)return toast('Select a map first');if(DB.mapRubrics)delete DB.mapRubrics[map];save();renderRubricEditor();renderMatchRubricPreview();toast('Default points restored for '+map)}
@@ -208,7 +208,6 @@ function scoreMatch(m,rule){
   award(maxOf(S,'kills'),'💀 most kills',r.kills);
   award(maxOf(S,'headshots'),'🎯 most headshots',r.headshots);
   S.forEach(s=>{const n=+s.revives||0,pts=n*r.revives;if(pts>0&&bd[s.playerId]){bd[s.playerId].total+=pts;bd[s.playerId].notes.push(`❤️ ${n} revives +${pts}`)}});
-  if(m.survivor)award([m.survivor],'🥇 last survivor',r.survivor);
   const rb=roundBonus(+m.round||0,r);if(rb>0)award(S.map(s=>s.playerId),`🧟 round ${m.round}`,rb);
   return bd;
 }
@@ -272,7 +271,7 @@ async function uploadPic(pic,dataUrl){
     for(let i=0;i<45;i++){
       await new Promise(r=>setTimeout(r,4000));
       let s;try{s=await(await fetch(FN_BASE+'/bolParseStatus?id='+pic.parseId)).json()}catch(e){continue}
-      if(s.ok&&s.status==='done'){applyParse(JSON.parse(s.resultJson));picStatus('✅ Stats pulled from the pic');return}
+      if(s.ok&&s.status==='done'){applyParse(JSON.parse(s.resultJson));return}
       if(s.ok&&s.status==='error'){picStatus('⚠️ '+(s.errorNote||"couldn't read that pic"));return}
     }
     picStatus('⚠️ Read timed out — retake the pic with the scoreboard visible');
@@ -280,15 +279,21 @@ async function uploadPic(pic,dataUrl){
 }
 function applyParse(p){
   if(!p)return;
-  if(p.round)setTimeout(()=>{const r=document.getElementById('mRound');if(r&&!r.value)r.value=p.round},50);
-  pendingParsedRows=(p.players||[]).map(ps=>({
-    name:ps.name||'',score:+ps.score||0,kills:+ps.kills||0,
-    headshots:+ps.headshots||0,revives:+ps.revives||0
+  const map=document.getElementById('mMap');
+  if(p.map&&BO3_MAPS.includes(p.map)){map.value=p.map;renderMatchRubricPreview()}
+  const round=document.getElementById('mRound');
+  if(Number.isInteger(Number(p.round))&&Number(p.round)>0&&!round.value)round.value=Number(p.round);
+  const stat=v=>v===null||v===undefined||v===''?null:(Number.isFinite(Number(v))&&Number(v)>=0?Number(v):null);
+  pendingParsedRows=(Array.isArray(p.players)?p.players:[]).map(ps=>({
+    name:ps.name||'',score:stat(ps.score),kills:stat(ps.kills),
+    headshots:stat(ps.headshots),revives:stat(ps.revives)
   })).slice(0,4);
   syncAssignments();
   renderReadout();
   document.getElementById('picUnmatched').innerHTML='';
-  const need=requiredPlayerCount();picStatus(pendingParsedRows.length>=need?'✅ Scoreboard read — assign all '+need+' player column'+(need===1?'':'s')+' below':'⚠️ Only '+pendingParsedRows.length+' of '+need+' player columns found — upload a clearer image');
+  const need=requiredPlayerCount();
+  const missing=pendingParsedRows.slice(0,need).some(row=>['score','kills','headshots','revives'].some(k=>row[k]===null));
+  picStatus(pendingParsedRows.length<need?'⚠️ Only '+pendingParsedRows.length+' of '+need+' player columns found — upload a clearer image':missing?'⚠️ Some stats are unreadable — upload a clearer picture':'✅ Player stats read. Check the detected map and round below.');
 }
 function requiredPlayerCount(){const m=document.getElementById('mMode')?.value||'4-Player';return m==='Solo'?1:(parseInt(m)||4)}
 function syncAssignments(){
@@ -298,8 +303,6 @@ function syncAssignments(){
     const el=document.getElementById('mPlace'+i),id=el&&el.value,row=pendingParsedRows[i];
     if(id&&row)pendingStats[id]={score:row.score,kills:row.kills,headshots:row.headshots,revives:row.revives};
   }
-  const survivor=document.getElementById('mSurvivor'),cur=survivor&&survivor.value;
-  if(survivor){const ids=getPlaceIds();survivor.innerHTML='<option value="">— nobody —</option>'+ids.map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('')}
   renderReadout();
 }
 function getPlaceIds(){return Array.from({length:requiredPlayerCount()},(_,i)=>{const e=document.getElementById('mPlace'+i);return e?e.value:''}).filter(Boolean)}
@@ -308,7 +311,8 @@ function renderReadout(){
   const rows=pendingParsedRows.slice(0,requiredPlayerCount());
   el.innerHTML=rows.length?'<div class="mini" style="margin-bottom:5px">🤖 '+rows.length+' player column'+(rows.length===1?'':'s')+' read from the pic:</div>'+rows.map((r,i)=>{
     const id=document.getElementById('mPlace'+i)?.value;
-    return `<div class="mini" style="padding:3px 0"><b>${i+1}${['st','nd','rd','th'][i]}:</b> ${id?esc(pname(id)):'not assigned'} · ${r.score} score · ${r.kills} kills · ${r.headshots} hs · ${r.revives} revives</div>`
+    const show=v=>v===null?'not readable':v;
+    return `<div class="mini" style="padding:3px 0"><b>${i+1}${['st','nd','rd','th'][i]}:</b> ${id?esc(pname(id)):'not assigned'} · ${show(r.score)} score · ${show(r.kills)} kills · ${show(r.headshots)} hs · ${show(r.revives)} revives</div>`
   }).join(''):'';
 }
 
@@ -370,8 +374,6 @@ function renderMatchForm(){
   const previous=Array.from({length:4},(_,i)=>document.getElementById('mPlace'+i)?.value||'');
   const medals=['1️⃣ 1st column','2️⃣ 2nd column','3️⃣ 3rd column','4️⃣ 4th column'].slice(0,count);
   pw.innerHTML=medals.map((label,i)=>`<div class="placepick"><label>${label}</label><select id="mPlace${i}" onchange="syncAssignments()"><option value="">Select player</option>${DB.players.map(p=>`<option value="${p.id}" ${previous[i]===p.id?'selected':''}>${esc(p.name)}${p.tag?' (@'+esc(p.tag)+')':''}</option>`).join('')}</select></div>`).join('');
-  const sel=document.getElementById('mSurvivor'),cur=sel.value;
-  sel.innerHTML='<option value="">— nobody —</option>'+getPlaceIds().map(id=>`<option value="${id}" ${cur===id?'selected':''}>${esc(pname(id))}</option>`).join('');
   syncAssignments();
 }
 function saveMatch(){
@@ -382,14 +384,16 @@ function saveMatch(){
   if(ids.length!==count)return toast('Assign all '+count+' scoreboard column'+(count===1?'':'s'));
   if(new Set(ids).size!==count)return toast('Each column needs a different player');
   if(!pendingPics.length)return toast('📷 End-game scoreboard pic is required');
-  if(pendingParsedRows.length<count)return toast('Wait for Jarvis to read '+count+' scoreboard column'+(count===1?'':'s'));
+  if(pendingParsedRows.length<count)return toast('Wait for AI to read '+count+' scoreboard column'+(count===1?'':'s'));
+  if(pendingParsedRows.slice(0,count).some(row=>['score','kills','headshots','revives'].some(k=>row[k]===null)))return toast('Some stats are unreadable — upload a clearer image');
   syncAssignments();
   const round=+document.getElementById('mRound').value||0;
+  if(!Number.isInteger(round)||round<1)return toast('Enter the round shown in the photo');
   const stats=ids.map(id=>({playerId:id,
     score:+pendingStats[id].score||0,kills:+pendingStats[id].kills||0,
     headshots:+pendingStats[id].headshots||0,revives:+pendingStats[id].revives||0}));
   const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
-    map,mode:document.getElementById('mMode').value,round,survivor:document.getElementById('mSurvivor').value||null,stats,
+    map,mode:document.getElementById('mMode').value,round,stats,
     placements:[...ids]};
   m.rule=mapRule(map);
   m.points=scoreMatch(m,m.rule);
@@ -415,7 +419,6 @@ function renderHist(){
         <b>${fmtDate(m.date)} · ${esc(m.map||'Map not recorded')} · ${esc(m.mode)}</b>
         <span class="mini">round ${m.round||'—'}</span>
       </div>
-      ${m.survivor?`<div class="mini">🏆 last survivor: ${esc(pname(m.survivor))}</div>`:''}
       ${m.pics&&m.pics.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${m.pics.map((t,i)=>`<img src="${t}" onclick="viewPic(this)" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer">`).join('')}</div>`:''}
       <div style="margin-top:8px">${m.stats.map(s=>{const p=m.points[s.playerId]||{total:0,notes:[]};
         return `<div class="mrow"><span>${esc(pname(s.playerId))}<span class="mini"> · ${s.kills}k ${s.headshots}hs ${s.revives}rev</span></span><b>+${p.total}</b></div>
