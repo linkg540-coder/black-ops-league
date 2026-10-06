@@ -100,31 +100,27 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <label>📷 Scoreboard pic (required)</label>
       <input type="file" id="mPic" accept="image/*" multiple style="display:none" onchange="picChosen(this)">
       <button class="btn ghost" onclick="document.getElementById('mPic').click()" style="margin-top:0">📷 Snap / upload end-game pic</button>
-      <div class="mini" id="picStatus" style="margin-top:8px">Required — Jarvis reads the stats from the pic 🤖</div>
+      <div class="mini" id="picStatus" style="margin-top:8px">Only 4-player runs count — upload the pic and it logs itself 🤖</div>
       <div id="picThumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
       <div id="picUnmatched"></div>
       <div id="picReadout" style="margin-top:8px"></div>
     </div>
     <div class="card">
-      <label>Match date</label>
-      <input type="date" id="mDate">
-      <label>BO3 Zombies map</label>
-      <div class="mini">AI fills the map if it can identify it in the photo. Choose it yourself if the map is not visible.</div>
-      <select id="mMap" onchange="renderMatchRubricPreview()"></select>
-      <div class="mini" id="mMapRubric" style="margin-top:7px"></div>
-      <label>Game mode</label>
-      <select id="mMode" onchange="renderMatchForm()">
-        <option>Solo</option><option>2-Player</option><option>3-Player</option><option>4-Player</option>
-      </select>
-      <label>Assign players to scoreboard columns</label>
-      <div class="mini">AI reads the player names and fills each column. Review the names and placements before saving. New players are added to the roster when the match is saved.</div>
-      <div id="mPlayers" class="placegrid"></div>
-      <div class="empty" id="mNoPlayers" style="display:none">Upload a scoreboard picture to detect players, or add them in the Players tab.</div>
-      <label>Team round reached</label>
-      <div class="mini">AI fills the round if it is visible in the photo. Enter it yourself if needed.</div>
-      <input type="number" id="mRound" min="1" placeholder="e.g. 27">
+      <div class="mini" style="line-height:1.8">
+        <b>⚡ Auto-log</b><br>
+        Upload the end-game scoreboard pic — that's it. Jarvis reads the map, round and all 4 columns, matches players by name (new names join the roster) and scores the match automatically.<br>
+        <b>Only 4-player runs count.</b> Anything else — wrong player count, unreadable stats, already logged — gets flagged and thrown away. Just re-upload a clearer pic.
+      </div>
+      <div id="mPlayers" class="placegrid" style="display:none"></div>
+      <div class="empty" id="mNoPlayers" style="display:none"></div>
+      <div style="display:none">
+        <input type="date" id="mDate">
+        <select id="mMap" onchange="renderMatchRubricPreview()"></select>
+        <div class="mini" id="mMapRubric"></div>
+        <select id="mMode" onchange="renderMatchForm()"><option>4-Player</option></select>
+        <input type="number" id="mRound" min="1">
+      </div>
     </div>
-    <button class="btn" onclick="saveMatch()">💾 Save match + score it</button>
   </section>
 
   <!-- HISTORY -->
@@ -277,30 +273,59 @@ async function uploadPic(pic,dataUrl){
     picStatus('⚠️ Read timed out — retake the pic with the scoreboard visible');
   }catch(e){picStatus('⚠️ '+e.message)}
 }
+function autoRun(p){
+  try{
+    const rows=pendingParsedRows;
+    if(rows.length!==4){throwAway('⚠️ '+rows.length+' player column'+(rows.length===1?'':'s')+' read — only 4-player runs count. Thrown away.');return}
+    if(rows.some(r=>!r.name)){throwAway('⚠️ A player name was unreadable — retake a clearer pic. Thrown away.');return}
+    if(new Set(rows.map(r=>nameKey(r.name))).size!==4){throwAway('⚠️ Duplicate player names read — retake the pic. Thrown away.');return}
+    if(rows.some(r=>['score','kills','headshots','revives'].some(k=>r[k]===null))){throwAway('⚠️ Some stats were unreadable — retake a clearer pic. Thrown away.');return}
+    if(!p.map||!BO3_MAPS.includes(p.map)){throwAway('⚠️ Map not recognized — retake a pic showing the map. Thrown away.');return}
+    if(!(Number.isInteger(Number(p.round))&&Number(p.round)>0)){throwAway('⚠️ Round number unreadable — retake the pic. Thrown away.');return}
+    const cand={map:p.map,round:Number(p.round),stats:rows.map(r=>({score:r.score,kills:r.kills,headshots:r.headshots,revives:r.revives}))};
+    const dup=findDupMatch(cand);
+    if(dup){throwAway('⚠️ This exact match is already logged ('+fmtDate(dup.date)+') — thrown away.');return}
+    const used=new Set();
+    for(let i=0;i<4;i++){
+      const sel=document.getElementById('mPlace'+i);if(!sel)continue;
+      const found=matchingPlayer(rows[i].name);
+      if(found&&!used.has(found.id)){sel.value=found.id;used.add(found.id)}
+      else{sel.value='new:'+i;const nf=document.getElementById('mNewName'+i);if(nf){nf.value=rows[i].name;nf.style.display='none'}}
+    }
+    syncAssignments();
+    picStatus('⚡ Auto-logging…');
+    saveMatch();
+  }catch(e){console.error(e);picStatus('⚠️ Something went wrong reading the pic — try again')}
+}
+function throwAway(msg){
+  toast(msg);picStatus('🗑 '+msg);
+  pendingPics=[];pendingStats={};pendingParsedRows=[];
+  ['picThumbs','picUnmatched','picReadout'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=''});
+  const pl=document.getElementById('mPlayers');if(pl)pl.innerHTML='';
+  const mp=document.getElementById('mMap');if(mp)mp.value='';
+  const mr=document.getElementById('mRound');if(mr)mr.value='';
+}
+
 function applyParse(p){
   if(!p)return;
   const map=document.getElementById('mMap');
   if(p.map&&BO3_MAPS.includes(p.map)){map.value=p.map;renderMatchRubricPreview()}
   const round=document.getElementById('mRound');
-  if(Number.isInteger(Number(p.round))&&Number(p.round)>0&&!round.value)round.value=Number(p.round);
+  if(Number.isInteger(Number(p.round))&&Number(p.round)>0)round.value=Number(p.round);else round.value='';
   const stat=v=>v===null||v===undefined||v===''?null:(Number.isFinite(Number(v))&&Number(v)>=0?Number(v):null);
   pendingParsedRows=(Array.isArray(p.players)?p.players:[]).map(ps=>({
     name:cleanPlayerName(ps.name),score:stat(ps.score),kills:stat(ps.kills),
     headshots:stat(ps.headshots),revives:stat(ps.revives)
   })).slice(0,4);
   document.getElementById('mPlayers').innerHTML='';
-  if(pendingParsedRows.length>=1&&pendingParsedRows.length<=4){
-    document.getElementById('mMode').value=pendingParsedRows.length===1?'Solo':pendingParsedRows.length+'-Player';
-  }
+  document.getElementById('mMode').value='4-Player';
   renderMatchForm();
   renderReadout();
-  dupWarnPending();
   document.getElementById('picUnmatched').innerHTML='';
-  const need=requiredPlayerCount();
-  const missing=pendingParsedRows.slice(0,need).some(row=>['score','kills','headshots','revives'].some(k=>row[k]===null));
-  picStatus(pendingParsedRows.length<need?'⚠️ Only '+pendingParsedRows.length+' of '+need+' player columns found — upload a clearer image':missing?'⚠️ Some stats are unreadable — upload a clearer picture':'✅ Player names and stats read. Review the column assignments, map and round.');
+  picStatus('🤖 Reading the pic…');
+  autoRun(p);
 }
-function requiredPlayerCount(){const m=document.getElementById('mMode')?.value||'4-Player';return m==='Solo'?1:(parseInt(m)||4)}
+function requiredPlayerCount(){return 4}
 function cleanPlayerName(value){const name=String(value||'').trim().replace(/\s+/g,' ').slice(0,40);return /^(player|unknown|unreadable|n\/?a|none|\?+|[-–—]+)$/i.test(name)?'':name}
 function nameKey(value){return String(value||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase()}
 function matchingPlayer(name){if(!name)return null;const key=nameKey(name),found=DB.players.filter(p=>nameKey(p.name)===key||(p.tag&&nameKey(p.tag)===key));return found.length===1?found[0]:null}
