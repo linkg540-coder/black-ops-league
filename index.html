@@ -264,13 +264,13 @@ async function uploadPic(pic,dataUrl){
     const fr=await fetch(FN_BASE+'/bolUploadFinish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pic.parseId,playerCount:requiredPlayerCount()})});
     const fj=await fr.json();if(!fj.ok)throw new Error(fj.error||'finish failed');
     picStatus('🤖 Jarvis is reading the scoreboard…');
-    for(let i=0;i<45;i++){
+    for(let i=0;i<120;i++){
       await new Promise(r=>setTimeout(r,4000));
       let s;try{s=await(await fetch(FN_BASE+'/bolParseStatus?id='+pic.parseId)).json()}catch(e){continue}
       if(s.ok&&s.status==='done'){applyParse(JSON.parse(s.resultJson));return}
       if(s.ok&&s.status==='error'){picStatus('⚠️ '+(s.errorNote||"couldn't read that pic"));return}
     }
-    picStatus('⚠️ Read timed out — retake the pic with the scoreboard visible');
+    picStatus('⚠️ Read is taking longer than usual — if it doesn\'t land in a few minutes, re-upload a clearer pic');
   }catch(e){picStatus('⚠️ '+e.message)}
 }
 function autoRun(p){
