@@ -294,6 +294,7 @@ function applyParse(p){
   }
   renderMatchForm();
   renderReadout();
+  dupWarnPending();
   document.getElementById('picUnmatched').innerHTML='';
   const need=requiredPlayerCount();
   const missing=pendingParsedRows.slice(0,need).some(row=>['score','kills','headshots','revives'].some(k=>row[k]===null));
@@ -428,6 +429,8 @@ function saveMatch(){
   m.rule=mapRule(map);
   m.points=scoreMatch(m,m.rule);
   m.pics=pendingPics.map(p=>p.thumb);
+  const dup=findDupMatch(m);
+  if(dup)return toast('⚠️ Duplicate — this exact match is already logged ('+fmtDate(dup.date)+', '+dup.map+')');
   DB.players.push(...newPlayers.map(({column,...player})=>player));
   DB.matches.push(m);save();
   pendingPics=[];pendingStats={};pendingParsedRows=[];
@@ -441,11 +444,52 @@ function saveMatch(){
   go('hist');
 }
 
+/* ---------- duplicate detection ---------- */
+function matchFingerprint(m){
+  const tuples=(m.stats||[]).map(s=>[s.score,s.kills,s.headshots,s.revives].join(',')).sort().join('|');
+  return (m.map||'')+'#'+(m.round||'')+'#'+tuples;
+}
+function findDupMatch(m){return DB.matches.find(x=>matchFingerprint(x)===matchFingerprint(m))}
+function dupWarnPending(){
+  try{
+    const need=requiredPlayerCount();
+    const rows=pendingParsedRows.slice(0,need);
+    if(rows.length<need)return;
+    if(rows.some(r=>['score','kills','headshots','revives'].some(k=>r[k]===null)))return;
+    const tuples=rows.map(r=>[r.score,r.kills,r.headshots,r.revives].join(',')).sort().join('|');
+    const curMap=document.getElementById('mMap').value;
+    const dup=DB.matches.find(m=>{const t=(m.stats||[]).map(s=>[s.score,s.kills,s.headshots,s.revives].join(',')).sort().join('|');return t===tuples&&(m.map===curMap||!curMap)});
+    if(dup){toast('⚠️ This scoreboard matches a match already logged ('+fmtDate(dup.date)+') — it won\'t save twice');picStatus('⚠️ Looks already logged · '+dup.map+' '+fmtDate(dup.date))}
+  }catch(e){}
+}
+let dupeScanOn=false;
+function toggleDupes(){dupeScanOn=!dupeScanOn;renderHist()}
+function renderDupesPanel(){
+  const groups={};DB.matches.forEach(m=>{const fp=matchFingerprint(m);(groups[fp]=groups[fp]||[]).push(m)});
+  const dupes=Object.values(groups).filter(g=>g.length>1);
+  if(!dupes.length)return '<div class="card"><div class="empty">No duplicates found ✅</div></div>';
+  return dupes.map(g=>{
+    g.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const keep=g[0],rest=g.slice(1);
+    const ids=rest.map(m=>m.id).join(',');
+    return `<div class="card histcard" style="border-color:var(--orange)">
+      <b>🔁 ${esc(keep.map)} · round ${keep.round} — logged ${g.length}×</b>
+      <div style="margin-top:6px">${g.map(m=>`<div class="mrow"><span>${fmtDate(m.date)}${m.id===keep.id?' <span class="mini">(oldest — will keep)</span>':''}</span><span class="del" onclick="delMatch('${m.id}')" style="padding:0 6px">🗑</span></div>`).join('')}</div>
+      <button class="btn ghost" style="margin-top:8px" onclick="delDupes('${ids}')">🗑 Delete ${rest.length} duplicate${rest.length>1?'s':''} (keep oldest)</button>
+    </div>`;
+  }).join('');
+}
+function delDupes(ids){
+  const list=ids.split(',');
+  if(!confirm('Delete '+list.length+' duplicate match'+(list.length>1?'es':'')+'? The oldest copy is kept.'))return;
+  DB.matches=DB.matches.filter(m=>!list.includes(m.id));save();renderHist();toast('Duplicates removed');
+}
+
 /* ---------- history ---------- */
 function renderHist(){
   const el=document.getElementById('v-hist');
   if(!DB.matches.length){el.innerHTML='<div class="card"><div class="empty">No matches yet 🧟</div></div>';return}
-  el.innerHTML=[...DB.matches].reverse().map(m=>{
+  el.innerHTML=`<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>📜 ${DB.matches.length} match${DB.matches.length===1?'':'es'}</b><button class="btn ghost" onclick="toggleDupes()">🔍 Find duplicates</button></div>`+(dupeScanOn?renderDupesPanel():'')+[...DB.matches].reverse().map(m=>{
     const tot=Object.values(m.points).reduce((a,b)=>a+b.total,0);
     return `<div class="card histcard">
       <span class="del" onclick="delMatch('${m.id}')">🗑</span>
