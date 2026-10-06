@@ -115,8 +115,8 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
       <div class="empty" id="mNoPlayers" style="display:none"></div>
       <div style="display:none">
         <input type="date" id="mDate">
-        <select id="mMap" onchange="renderMatchRubricPreview()"></select>
-        <div class="mini" id="mMapRubric"></div>
+        <select id="mMap"></select>
+        
         <select id="mMode" onchange="renderMatchForm()"><option>4-Player</option></select>
         <input type="number" id="mRound" min="1">
       </div>
@@ -142,13 +142,13 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
   <!-- RUBRIC -->
   <section class="view" id="v-rubric">
     <div class="card">
-      <label>Map scoring rules</label>
-      <div class="mini">Choose a map to change its points. Each map starts with the existing league rubric. Changes apply only to new matches; saved match totals stay the same.</div>
-      <select id="rMap" onchange="renderRubricEditor()" style="margin-top:10px"></select>
-      <div id="rFields" class="rulegrid"></div>
-      <button class="btn ghost" onclick="saveMapRubric()" style="margin-top:12px">Save points for this map</button>
-      <button class="btn ghost" onclick="resetMapRubric()" style="margin-top:8px">Reset this map to default</button>
-      <p class="mini" style="margin-top:12px">Round bonuses stack as the team climbs (round 27 = the round 11 and round 21 bonuses). Tied leaders all earn the category points. Round points go to every player.</p>
+      <label>[NEW] Black Ops 4P Zombie League scoring</label>
+      <div class="mini">League rules: Black Ops 3 runs only · Power Vacuum gumball is banned · the 4-player team must survive at least 25 rounds · screenshots must show rounds survived, map name, and all 4 player names with headshots.</div>
+      <div class="mini" style="margin-top:6px">Player scoring range 20–120. Same rubric for every map. Changes apply only to new matches; saved match totals stay the same.</div>
+      <div id="rFields" class="rulegrid" style="margin-top:10px"></div>
+      <button class="btn ghost" onclick="saveRubric()" style="margin-top:12px">Save league scoring</button>
+      <button class="btn ghost" onclick="resetRubric()" style="margin-top:8px">Reset to default</button>
+      <p class="mini" style="margin-top:12px">Score and kills are each ranked 1st–4th for the match; every player earns the points for their own rank in each category. Ties share the higher rank's points. Headshots and revives are recorded but no longer scored. Round is no longer a scoring bonus — Rule #3 requires surviving at least 25 rounds.</p>
     </div>
   </section>
 </div>
@@ -163,14 +163,13 @@ let DB=load();
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{players:[],matches:[]}}catch(e){return{players:[],matches:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB))}
 const BO3_MAPS=['Shadows of Evil','The Giant','Der Eisendrache','Zetsubou No Shima','Gorod Krovi','Revelations','Nacht der Untoten','Verrückt','Shi No Numa','Kino der Toten','Ascension','Shangri-La','Moon','Origins'];
-const DEFAULT_RULE={score:3,kills:2,headshots:2,revives:2,round11:2,round21:4,round31:6,round41:8,round51:10};
-const RULE_FIELDS=[['score','Highest in-game score'],['kills','Most kills'],['headshots','Most headshots'],['revives','Each revive'],['round11','Round 11–20'],['round21','Round 21–30'],['round31','Round 31–40'],['round41','Round 41–50'],['round51','Round 51+']];
-function mapRule(name){return {...DEFAULT_RULE,...((DB.mapRubrics||{})[name]||{})}}
-function initMaps(){const opts='<option value="">Select a BO3 map</option>'+BO3_MAPS.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');document.getElementById('mMap').innerHTML=opts;document.getElementById('rMap').innerHTML=opts}
-function renderMatchRubricPreview(){const map=document.getElementById('mMap').value,el=document.getElementById('mMapRubric');if(!map){el.textContent='Select a map to use its points rubric.';return}const r=mapRule(map);el.textContent='Map points: top score +'+r.score+' · kills +'+r.kills+' · headshots +'+r.headshots+' · revives +'+r.revives+' each · round bonuses '+[r.round11,r.round21,r.round31,r.round41,r.round51].map(n=>'+'+n).join(', ')}
-function renderRubricEditor(){const map=document.getElementById('rMap').value,el=document.getElementById('rFields');if(!map){el.innerHTML='';return}const rule=mapRule(map);el.innerHTML=RULE_FIELDS.map(([key,label])=>`<div><label for="rule-${key}">${esc(label)}</label><input id="rule-${key}" type="number" min="0" max="1000" step="1" value="${rule[key]}"></div>`).join('')}
-function saveMapRubric(){const map=document.getElementById('rMap').value;if(!map)return toast('Select a map first');const rule={};for(const[key]of RULE_FIELDS){const el=document.getElementById('rule-'+key),v=Number(el.value);if(el.value.trim()===''||!Number.isInteger(v)||v<0||v>1000)return toast('Use whole points from 0 to 1000');rule[key]=v}DB.mapRubrics=DB.mapRubrics||{};DB.mapRubrics[map]=rule;save();renderMatchRubricPreview();toast('Points saved for '+map)}
-function resetMapRubric(){const map=document.getElementById('rMap').value;if(!map)return toast('Select a map first');if(DB.mapRubrics)delete DB.mapRubrics[map];save();renderRubricEditor();renderMatchRubricPreview();toast('Default points restored for '+map)}
+const DEFAULT_RULE={score1:70,score2:60,score3:40,score4:20,kills1:50,kills2:30,kills3:10};
+const RULE_FIELDS=[['score1','1st highest score'],['score2','2nd highest score'],['score3','3rd highest score'],['score4','4th highest score'],['kills1','1st highest kills'],['kills2','2nd highest kills'],['kills3','3rd highest kills']];
+function leagueRule(){return {...DEFAULT_RULE,...(DB.leagueRubric||{})}}
+function initMaps(){const opts='<option value="">Select a BO3 map</option>'+BO3_MAPS.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');document.getElementById('mMap').innerHTML=opts}
+function renderRubricEditor(){const el=document.getElementById('rFields'),rule=leagueRule();el.innerHTML=RULE_FIELDS.map(([key,label])=>`<div><label for="rule-${key}">${esc(label)} <span style="opacity:.6">+${rule[key]}</span></label><input id="rule-${key}" type="number" min="0" max="1000" step="1" value="${rule[key]}"></div>`).join('')}
+function saveRubric(){const rule={};for(const[key]of RULE_FIELDS){const el=document.getElementById('rule-'+key),v=Number(el.value);if(el.value.trim()===''||!Number.isInteger(v)||v<0||v>1000)return toast('Use whole points from 0 to 1000');rule[key]=v}DB.leagueRubric=rule;delete DB.mapRubrics;save();renderRubricEditor();toast('✅ League scoring saved')}
+function resetRubric(){delete DB.leagueRubric;delete DB.mapRubrics;save();renderRubricEditor();toast('League scoring reset to default')}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
 function uid(){return Math.random().toString(36).slice(2,10)}
@@ -193,23 +192,30 @@ function buildNav(){
   document.getElementById('nav').innerHTML=TABS.map(([id,icon,label])=>`<button onclick="go('${id}')"><div>${icon}</div>${label}</button>`).join('');
 }
 
-/* ---------- scoring per map rubric ---------- */
-function roundBonus(round,rule){let pts=0;for(const[start,key]of [[11,'round11'],[21,'round21'],[31,'round31'],[41,'round41'],[51,'round51']])if(round>=start)pts+=rule[key];return pts}
-function maxOf(rows,key){if(!rows.length)return[];const m=Math.max(...rows.map(r=>+r[key]||0));if(m<=0)return[];return rows.filter(r=>+r[key]===m).map(r=>r.playerId)}
+/* ---------- scoring: league placement rubric (20-120) ---------- */
+const ORD=['1st','2nd','3rd','4th'];
 function scoreMatch(m,rule){
-  const r=rule||mapRule(m.map),S=m.stats,bd={};
+  const r=rule||leagueRule(),S=m.stats,bd={};
   S.forEach(s=>bd[s.playerId]={total:0,notes:[]});
-  const award=(ids,label,pts)=>{if(pts>0)ids.forEach(id=>{if(bd[id]){bd[id].total+=pts;bd[id].notes.push(`${label} +${pts}`)}})};
-  award(maxOf(S,'score'),'🏆 top score',r.score);
-  award(maxOf(S,'kills'),'💀 most kills',r.kills);
-  award(maxOf(S,'headshots'),'🎯 most headshots',r.headshots);
-  S.forEach(s=>{const n=+s.revives||0,pts=n*r.revives;if(pts>0&&bd[s.playerId]){bd[s.playerId].total+=pts;bd[s.playerId].notes.push(`❤️ ${n} revives +${pts}`)}});
-  const rb=roundBonus(+m.round||0,r);if(rb>0)award(S.map(s=>s.playerId),`🧟 round ${m.round}`,rb);
+  const award=(id,label,pts)=>{if(pts>0&&bd[id]){bd[id].total+=pts;bd[id].notes.push(`${label} +${pts}`)}};
+  // Rank every column by value; ties share the higher rank's points (competition ranking)
+  const placeAward=(key,icon)=>{
+    const sorted=S.map(s=>({id:s.playerId,v:+s[key]||0})).sort((x,y)=>y.v-x.v);
+    let i=0;
+    while(i<sorted.length){
+      let j=i;while(j+1<sorted.length&&sorted[j+1].v===sorted[i].v)j++;
+      const pts=+r[key+(i+1)]||0;
+      for(let k=i;k<=j;k++){if(sorted[k].v>0)award(sorted[k].id,`${icon} ${ORD[i]} ${key}`,pts)}
+      i=j+1;
+    }
+  };
+  placeAward('score','🏆');
+  placeAward('kills','💀');
   return bd;
 }
 
 /* ---------- scoreboard pic + AI parse ---------- */
-const FN_BASE='https://solene-11f8ed2a.base44.app/functions';
+const FN_BASE='https://elio-caaf5f36.base44.app/functions';
 let DEV_ID=localStorage.getItem('bol_device');
 if(!DEV_ID){DEV_ID=Math.random().toString(36).slice(2,12);localStorage.setItem('bol_device',DEV_ID)}
 let pendingPics=[];
@@ -309,7 +315,7 @@ function throwAway(msg){
 function applyParse(p){
   if(!p)return;
   const map=document.getElementById('mMap');
-  if(p.map&&BO3_MAPS.includes(p.map)){map.value=p.map;renderMatchRubricPreview()}
+  if(p.map&&BO3_MAPS.includes(p.map))map.value=p.map;
   const round=document.getElementById('mRound');
   if(Number.isInteger(Number(p.round))&&Number(p.round)>0)round.value=Number(p.round);else round.value='';
   const stat=v=>v===null||v===undefined||v===''?null:(Number.isFinite(Number(v))&&Number(v)>=0?Number(v):null);
@@ -430,6 +436,7 @@ function saveMatch(){
   if(pendingParsedRows.slice(0,count).some(row=>['score','kills','headshots','revives'].some(k=>row[k]===null)))return toast('Some stats are unreadable — upload a clearer image');
   const round=Number(document.getElementById('mRound').value);
   if(!Number.isInteger(round)||round<1)return toast('Enter the round shown in the photo');
+  if(round<25)return toast('League Rule #3: the team must survive at least 25 rounds');
   const newPlayers=[],seen=new Set();
   for(let i=0;i<count;i++){
     const choice=selections[i];
@@ -451,7 +458,7 @@ function saveMatch(){
   const stats=ids.map((id,i)=>({playerId:id,score:pendingParsedRows[i].score,kills:pendingParsedRows[i].kills,headshots:pendingParsedRows[i].headshots,revives:pendingParsedRows[i].revives}));
   const m={id:uid(),date:document.getElementById('mDate').value||new Date().toISOString().slice(0,10),
     map,mode:document.getElementById('mMode').value,round,stats,placements:[...ids]};
-  m.rule=mapRule(map);
+  m.rule=leagueRule();
   m.points=scoreMatch(m,m.rule);
   m.pics=pendingPics.map(p=>p.thumb);
   const dup=findDupMatch(m);
@@ -462,7 +469,6 @@ function saveMatch(){
   document.getElementById('mRound').value='';
   document.getElementById('mMap').value='';
   document.getElementById('mPlayers').innerHTML='';
-  renderMatchRubricPreview();
   renderMatchForm();
   const tot=Object.values(m.points).reduce((a,b)=>a+b.total,0);
   toast('✅ Match logged — '+tot+' league points awarded');
@@ -538,7 +544,6 @@ function delMatch(id){
 }
 
 initMaps();
-renderMatchRubricPreview();
 buildNav();
 go('board');
 </script>
