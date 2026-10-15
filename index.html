@@ -152,18 +152,6 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
     <div class="card" id="pList"></div>
   </section>
 
-  <!-- RUBRIC -->
-  <section class="view" id="v-rubric">
-    <div class="card">
-      <label>[NEW] Black Ops 4P Zombie League scoring</label>
-      <div class="mini">League rules: Black Ops 3 runs only · Power Vacuum gumball is banned · the 4-player team must survive at least 25 rounds · screenshots must show rounds survived, map name, and all 4 player names with headshots.</div>
-      <div class="mini" style="margin-top:6px">Player scoring range 20–120. Same rubric for every map. Changes apply only to new matches; saved match totals stay the same.</div>
-      <div id="rFields" class="rulegrid" style="margin-top:10px"></div>
-      <button class="btn ghost" onclick="saveRubric()" style="margin-top:12px">Save league scoring</button>
-      <button class="btn ghost" onclick="resetRubric()" style="margin-top:8px">Reset to default</button>
-      <p class="mini" style="margin-top:12px">Score and kills are each ranked 1st–4th for the match; every player earns the points for their own rank in each category. Ties share the higher rank's points. Headshots and revives are recorded but no longer scored. Round is no longer a scoring bonus — Rule #3 requires surviving at least 25 rounds.</p>
-    </div>
-  </section>
 </div>
 
 <div id="picOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;display:none;align-items:center;justify-content:center;padding:16px" onclick="this.style.display='none'"><img id="picOverlayImg" style="max-width:100%;max-height:100%;border-radius:10px"></div>
@@ -178,17 +166,14 @@ function save(){localStorage.setItem(KEY,JSON.stringify(DB))}
 const BO3_MAPS=['Shadows of Evil','The Giant','Der Eisendrache','Zetsubou No Shima','Gorod Krovi','Revelations','Nacht der Untoten','Verrückt','Shi No Numa','Kino der Toten','Ascension','Shangri-La','Moon','Origins'];
 const DEFAULT_RULE={score1:70,score2:60,score3:40,score4:20,kills1:50,kills2:30,kills3:10};
 const RULE_FIELDS=[['score1','1st highest score'],['score2','2nd highest score'],['score3','3rd highest score'],['score4','4th highest score'],['kills1','1st highest kills'],['kills2','2nd highest kills'],['kills3','3rd highest kills']];
-function leagueRule(){return {...DEFAULT_RULE,...(DB.leagueRubric||{})}}
+function leagueRule(){return {...DEFAULT_RULE}}
 function initMaps(){const opts='<option value="">Select a BO3 map</option>'+BO3_MAPS.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');document.getElementById('mMap').innerHTML=opts}
-function renderRubricEditor(){const el=document.getElementById('rFields'),rule=leagueRule();el.innerHTML=RULE_FIELDS.map(([key,label])=>`<div><label for="rule-${key}">${esc(label)} <span style="opacity:.6">+${rule[key]}</span></label><input id="rule-${key}" type="number" min="0" max="1000" step="1" value="${rule[key]}"></div>`).join('')}
-function saveRubric(){const rule={};for(const[key]of RULE_FIELDS){const el=document.getElementById('rule-'+key),v=Number(el.value);if(el.value.trim()===''||!Number.isInteger(v)||v<0||v>1000)return toast('Use whole points from 0 to 1000');rule[key]=v}DB.leagueRubric=rule;delete DB.mapRubrics;save();renderRubricEditor();toast('✅ League scoring saved')}
-function resetRubric(){delete DB.leagueRubric;delete DB.mapRubrics;save();renderRubricEditor();toast('League scoring reset to default')}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
 function uid(){return Math.random().toString(36).slice(2,10)}
 function fmtDate(iso){if(!iso)return'';const d=new Date(iso+'T12:00:00');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
 
-const TABS=[['board','🏆','Leaderboard'],['match','➕','New match'],['hist','📜','History'],['players','👥','Players'],['rubric','📖','Rubric']];
+const TABS=[['board','🏆','Leaderboard'],['match','➕','New match'],['hist','📜','History'],['players','👥','Players']];
 function go(tab){
   TABS.forEach(([id])=>{const v=document.getElementById('v-'+id);if(v)v.classList.toggle('on',id===tab)});
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',TABS[i][0]===tab));
@@ -197,7 +182,6 @@ function go(tab){
   if(tab==='match'){renderMatchForm();if(!pendingPics.length){pendingStats={};pendingParsedRows=[];document.getElementById('picThumbs').innerHTML='';document.getElementById('picUnmatched').innerHTML='';document.getElementById('picReadout').innerHTML='';picStatus('Required — Jarvis reads the stats from the pic 🤖')}}
   if(tab==='hist')renderHist();
   if(tab==='players')renderPlayers();
-  if(tab==='rubric')renderRubricEditor();
   window.scrollTo(0,0);
 }
 function buildNav(){
