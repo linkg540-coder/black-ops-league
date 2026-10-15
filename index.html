@@ -85,9 +85,22 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 </style>
 </head>
 <body>
+
+<div id="userGate" style="position:fixed;inset:0;background:var(--bg);z-index:200;display:none;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="max-width:340px;width:100%;text-align:center">
+    <h2 style="margin:0 0 6px">👤 Pick your username</h2>
+    <p class="mini" style="margin:0 0 14px">Required — so Jarvis can match your name to the scoreboard pics you upload.</p>
+    <input id="gateName" list="gateSuggest" maxlength="40" placeholder="Your in-game username" style="width:100%;text-align:center;font-size:18px;padding:10px" onkeydown="if(event.key==='Enter')submitGate()">
+    <datalist id="gateSuggest"></datalist>
+    <button class="btn" style="width:100%;margin-top:12px" onclick="submitGate()">Enter the League ⚫</button>
+    <p class="mini" id="gateMsg" style="margin-top:10px;min-height:1em;color:#f66"></p>
+  </div>
+</div>
+
 <div class="wrap">
   <h1>Black <span>Ops</span> League</h1>
   <div class="sub">🧟 Zombies league tracker — points per the rubric</div>
+  <div class="mini" id="whoami" style="cursor:pointer;text-decoration:underline" onclick="changeName()"></div>
 
   <div class="tabs" id="tabs"></div>
 
@@ -216,6 +229,46 @@ function scoreMatch(m,rule){
 
 /* ---------- scoreboard pic + AI parse ---------- */
 const FN_BASE='https://solene-11f8ed2a.base44.app/functions';
+/* ---------- username gate (required before entering) ---------- */
+const FN_USERS=FN_BASE;
+function getUserName(){return localStorage.getItem('bol_username')||''}
+async function fetchRegistry(){try{const r=await fetch(FN_USERS+'/bolPlayers');const j=await r.json();return j.ok?j.players:[]}catch(e){return[]}}
+async function registerName(name){
+  try{
+    await fetch(FN_USERS+'/bolPlayers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,deviceId:DEV_ID,username:name})});
+  }catch(e){}
+}
+function submitGate(){
+  const el=document.getElementById('gateName');
+  const name=(el.value||'').trim().replace(/\s+/g,' ');
+  if(!name){document.getElementById('gateMsg').textContent='Pick a username to enter — required.';return}
+  localStorage.setItem('bol_username',name);
+  registerName(name);
+  document.getElementById('userGate').style.display='none';
+  toast('👤 Welcome, '+name);
+  showWho();
+}
+function showWho(){
+  const el=document.getElementById('whoami');
+  if(el)el.textContent=getUserName()?('Signed in as '+getUserName()+' — tap to change'):'Pick your username';
+}
+async function checkGate(){
+  if(!getUserName()){
+    const names=await fetchRegistry();
+    document.getElementById('gateSuggest').innerHTML=names.map(p=>`<option value="${esc(p.name)}">`).join('');
+    document.getElementById('userGate').style.display='flex';
+    return false;
+  }
+  registerName(getUserName());
+  return true;
+}
+function changeName(){
+  localStorage.removeItem('bol_username');
+  checkGate();
+  document.getElementById('userGate').style.display='flex';
+  document.getElementById('gateName').value='';
+  document.getElementById('gateName').focus();
+}
 let DEV_ID=localStorage.getItem('bol_device');
 if(!DEV_ID){DEV_ID=Math.random().toString(36).slice(2,12);localStorage.setItem('bol_device',DEV_ID)}
 let pendingPics=[];
@@ -259,7 +312,7 @@ async function uploadPic(pic,dataUrl){
   try{
     const b64=dataUrl.split(',')[1]||'';
     if(b64.length>3_600_000)throw new Error('pic too big');
-    const r=await fetch(FN_BASE+'/bolUploadStart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:DEV_ID})});
+    const r=await fetch(FN_BASE+'/bolUploadStart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:DEV_ID,username:getUserName()})});
     const j=await r.json();if(!j.ok)throw new Error(j.error||'upload failed');
     pic.parseId=j.id;
     const CH=9000,n=Math.ceil(b64.length/CH);
@@ -546,6 +599,8 @@ function delMatch(id){
 initMaps();
 buildNav();
 go('board');
+showWho();
+checkGate();
 </script>
 </body>
 </html>
