@@ -1,8 +1,10 @@
 name: BOL Parse Dispatcher
 
 on:
+  repository_dispatch:
+    types: [bol-parse]
   schedule:
-    - cron: '*/2 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch: {}
 
 permissions:
